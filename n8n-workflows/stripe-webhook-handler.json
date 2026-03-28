@@ -1,0 +1,172 @@
+{
+  "name": "TitanCrew — Stripe Webhook → MetaSwarm Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stripe-events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Stripe Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "stripe-events"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify Stripe signature\nconst crypto = require('crypto');\nconst body = $input.item.json.body;\nconst signature = $input.item.json.headers['stripe-signature'];\nconst webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;\n\n// Parse the event\nconst event = typeof body === 'string' ? JSON.parse(body) : body;\n\n// Route to appropriate meta-swarm action\nconst eventTypeMap = {\n  'checkout.session.completed': { event: 'onboard_deploy', priority: 'critical' },\n  'invoice.payment_failed': { event: 'payment_failed', priority: 'high' },\n  'customer.subscription.deleted': { event: 'subscription_deleted', priority: 'high' },\n  'customer.subscription.trial_will_end': { event: 'trial_ending', priority: 'normal' },\n};\n\nconst routing = eventTypeMap[event.type];\nif (!routing) {\n  return [{ json: { skip: true, eventType: event.type } }];\n}\n\nconst obj = event.data.object;\nreturn [{\n  json: {\n    metaEvent: routing.event,\n    priority: routing.priority,\n    stripeEventType: event.type,\n    stripeEventId: event.id,\n    payload: {\n      stripeCustomerId: obj.customer,\n      stripeSessionId: obj.id,\n      invoiceId: obj.id,\n      ownerEmail: obj.customer_details?.email || obj.customer_email,\n      trialEnd: obj.trial_end,\n    }\n  }\n}];"
+      },
+      "id": "parse-and-route",
+      "name": "Parse & Route Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-process",
+      "name": "Should Process?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.AGENT_API_URL }}/meta-swarm/trigger",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AGENT_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"event\": \"{{ $json.metaEvent }}\", \"priority\": \"{{ $json.priority }}\", \"payload\": {{ JSON.stringify($json.payload) }} }",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "trigger-meta-swarm",
+      "name": "Trigger MetaSwarm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"received\": true, \"event\": \"{{ $('Parse & Route Event').item.json.stripeEventType }}\", \"skipped\": true }",
+        "options": {}
+      },
+      "id": "respond-skip",
+      "name": "Respond: Skipped",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 380]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"received\": true, \"event\": \"{{ $('Parse & Route Event').item.json.stripeEventType }}\", \"runId\": \"{{ $json.runId }}\" }",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond: Queued",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 240]
+    }
+  ],
+  "connections": {
+    "Stripe Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse & Route Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Route Event": {
+      "main": [
+        [
+          {
+            "node": "Should Process?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Process?": {
+      "main": [
+        [
+          {
+            "node": "Trigger MetaSwarm",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger MetaSwarm": {
+      "main": [
+        [
+          {
+            "node": "Respond: Queued",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "errorWorkflow": "titancrew-error-handler"
+  },
+  "tags": ["titancrew", "meta-swarm", "stripe", "billing"]
+}

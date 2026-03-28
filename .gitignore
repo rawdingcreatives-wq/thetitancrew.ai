@@ -1,0 +1,30 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+.next
+dist
+*.js.map
+
+# Environment files — NEVER commit these
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Turbo
+.turbo
+
+# Misc
+.DS_Store
+*.log
+.vercel
+.railway
+
+# Supabase local dev
+supabase/.branches
+supabase/.temp
+
+# Test artifacts
+coverage

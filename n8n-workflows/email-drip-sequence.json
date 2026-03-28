@@ -1,0 +1,146 @@
+{
+  "name": "TitanCrew — Cold Email Drip Sequence (5-Touch / 10 Days)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-drip",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "drip-webhook",
+      "name": "Add to Drip Sequence",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "email-drip"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build personalized email sequence\nconst { leadId, email, firstName, tradeType, painPoints, outreachAngle } = $input.item.json;\n\nconst painStr = painPoints?.[0] ?? 'running your business manually';\nconst trade = tradeType ?? 'contractor';\n\nconst sequence = [\n  {\n    day: 0,\n    subject: `Quick question, ${firstName}`,\n    body: `Hey ${firstName},\\n\\nI came across your work and noticed you're running a ${trade} business.\\n\\nQuick question: are you still manually handling ${painStr}?\\n\\nMost ${trade}s I talk to are losing $2-3k/month in unbilled jobs and missed follow-ups. We built an AI crew to fix that.\\n\\nWould a quick 5-minute look make sense?\\n\\n— The TitanCrew Team\\nhttps://app.titancrew.ai/demo?lead=${leadId}`\n  },\n  {\n    day: 2,\n    subject: `${trade} business tip (saves ~8 hrs/week)`,\n    body: `Hey ${firstName},\\n\\nBefore I follow up on my last message — wanted to share something useful.\\n\\nMost ${trade} businesses lose 8+ hours/week to: scheduling back-and-forth, chasing unpaid invoices, remembering to follow up with leads.\\n\\nTitanCrew's AI crew handles all 3 automatically. Takes 10 minutes to set up.\\n\\nStill think this could be useful for you: https://app.titancrew.ai/demo?lead=${leadId}\\n\\n— The TitanCrew Team`\n  },\n  {\n    day: 4,\n    subject: `${firstName}, did this land in spam?`,\n    body: `Hey ${firstName},\\n\\nJust checking — I've sent a couple notes and want to make sure I'm not being annoying.\\n\\nIf you're not interested in automating your ${trade} business, just reply NO and I'll never bother you again.\\n\\nBut if the timing is right — here's a 30-second demo I made for your trade:\\nhttps://app.titancrew.ai/demo?lead=${leadId}&trade=${tradeType}\\n\\n— TitanCrew`\n  },\n  {\n    day: 7,\n    subject: `What other ${trade}s are saying...`,\n    body: `Hey ${firstName},\\n\\nLast thing I'll share:\\n\\n\"My TitanCrew booked 4 jobs while I was on a job site. I didn't touch my phone once.\" — Marcus, HVAC contractor in Phoenix\\n\\nThat's the goal — a business that runs itself when you're in the field.\\n\\nIf you ever want to see what this looks like for your setup:\\nhttps://app.titancrew.ai/demo?lead=${leadId}\\n\\n— TitanCrew`\n  },\n  {\n    day: 10,\n    subject: `Last one from me, ${firstName}`,\n    body: `Hey ${firstName},\\n\\nThis is my last note — I don't want to clutter your inbox.\\n\\nIf TitanCrew isn't the right fit right now, no worries. Running a ${trade} business is hard and timing matters.\\n\\nIf you ever want to check it out in the future:\\nhttps://app.titancrew.ai\\n\\nWishing you a busy season,\\n— The TitanCrew Team`\n  }\n];\n\nreturn [{ json: { leadId, email, firstName, sequence } }];"
+      },
+      "id": "build-sequence",
+      "name": "Build Email Sequence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "sequence",
+        "options": {}
+      },
+      "id": "split-emails",
+      "name": "Split Into Individual Emails",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.day }}",
+        "unit": "days"
+      },
+      "id": "wait-for-day",
+      "name": "Wait N Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "crew@titancrew.ai",
+        "fromName": "TitanCrew",
+        "toEmail": "={{ $('Build Email Sequence').item.json.email }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email (SendGrid)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/meta_leads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"status\": \"drip_active\", \"last_email_sent_at\": \"{{ $now.toISO() }}\" }",
+        "options": {
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "id",
+                "value": "=eq.{{ $('Build Email Sequence').item.json.leadId }}"
+              }
+            ]
+          }
+        },
+        "method": "PATCH"
+      },
+      "id": "update-lead-status",
+      "name": "Update Lead Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Add to Drip Sequence": {
+      "main": [
+        [{ "node": "Build Email Sequence", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Email Sequence": {
+      "main": [
+        [{ "node": "Split Into Individual Emails", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split Into Individual Emails": {
+      "main": [
+        [{ "node": "Wait N Days", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait N Days": {
+      "main": [
+        [{ "node": "Send Email (SendGrid)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Email (SendGrid)": {
+      "main": [
+        [{ "node": "Update Lead Status", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  },
+  "tags": ["titancrew", "meta-swarm", "email", "drip", "sales"]
+}

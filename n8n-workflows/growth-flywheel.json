@@ -1,0 +1,201 @@
+{
+  "name": "TitanCrew — Growth Flywheel",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "minutesInterval": 6 }] }
+      },
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 180],
+      "id": "growth-cron-social"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 7 * * *" }
+          ]
+        }
+      },
+      "name": "Daily 7AM — Case Studies",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 320],
+      "id": "growth-cron-case-study"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 22 * * *" }
+          ]
+        }
+      },
+      "name": "Daily 10PM — Viral Scanner",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 460],
+      "id": "growth-cron-viral"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 6 * * 1" }
+          ]
+        }
+      },
+      "name": "Weekly Monday — Growth Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 600],
+      "id": "growth-cron-report"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/growth/social-post",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ $json }}"
+      },
+      "name": "Trigger Social Posting Round",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [480, 180],
+      "id": "trigger-social"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/growth/case-study",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={ \"batch\": true }"
+      },
+      "name": "Trigger Case Study Batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [480, 320],
+      "id": "trigger-case-study"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/growth/viral-scan",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "{}"
+      },
+      "name": "Trigger Viral Scanner",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [480, 460],
+      "id": "trigger-viral"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/growth/weekly-report",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "{}"
+      },
+      "name": "Trigger Weekly Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [480, 600],
+      "id": "trigger-report"
+    },
+    {
+      "parameters": {
+        "channel": "#titancrew-growth",
+        "text": "✅ Growth round complete: {{ $json.results.socialPosts }} posts, {{ $json.results.caseStudies }} case studies generated"
+      },
+      "name": "Slack Growth Notify",
+      "type": "n8n-nodes-base.slack",
+      "position": [720, 180],
+      "id": "slack-growth"
+    },
+    {
+      "parameters": {
+        "path": "/webhooks/job-completed",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "name": "Job Completed Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [240, 780],
+      "id": "job-completed-webhook"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/growth/case-study",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ { accountId: $json.accountId, jobId: $json.jobId } }}"
+      },
+      "name": "Generate Case Study For Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [480, 780],
+      "id": "case-study-for-job"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/growth/viral-event",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ { accountId: $json.accountId, eventType: 'first_job_completed', data: { jobId: $json.jobId, amount: $json.amount } } }}"
+      },
+      "name": "Check First Job Viral Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [720, 780],
+      "id": "first-job-viral"
+    },
+    {
+      "parameters": {
+        "path": "/webhooks/referral-signup",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "name": "Referral Signup Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [240, 940],
+      "id": "referral-webhook"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/growth/referral/validate",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ { code: $json.referralCode } }}"
+      },
+      "name": "Validate Referral Code",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [480, 940],
+      "id": "validate-referral"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/growth/viral-event",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ { accountId: $json.referringAccountId, eventType: 'referral_converted', data: { newAccountId: $json.newAccountId, newBusinessName: $json.businessName } } }}"
+      },
+      "name": "Fire Referral Converted Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [720, 940],
+      "id": "referral-converted"
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": { "main": [[{ "node": "Trigger Social Posting Round", "type": "main", "index": 0 }]] },
+    "Daily 7AM — Case Studies": { "main": [[{ "node": "Trigger Case Study Batch", "type": "main", "index": 0 }]] },
+    "Daily 10PM — Viral Scanner": { "main": [[{ "node": "Trigger Viral Scanner", "type": "main", "index": 0 }]] },
+    "Weekly Monday — Growth Report": { "main": [[{ "node": "Trigger Weekly Report", "type": "main", "index": 0 }]] },
+    "Trigger Social Posting Round": { "main": [[{ "node": "Slack Growth Notify", "type": "main", "index": 0 }]] },
+    "Job Completed Webhook": {
+      "main": [
+        [
+          { "node": "Generate Case Study For Job", "type": "main", "index": 0 },
+          { "node": "Check First Job Viral Event", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Referral Signup Webhook": { "main": [[{ "node": "Validate Referral Code", "type": "main", "index": 0 }]] },
+    "Validate Referral Code": { "main": [[{ "node": "Fire Referral Converted Event", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

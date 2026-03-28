@@ -1,0 +1,115 @@
+{
+  "name": "TitanCrew — Daily Churn Prevention Scan",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-cron",
+      "name": "Daily 9:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.AGENT_API_URL }}/meta-swarm/trigger",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AGENT_API_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"event\": \"daily_churn_scan\", \"priority\": \"normal\" }",
+        "options": { "timeout": 120000 }
+      },
+      "id": "run-churn-scan",
+      "name": "Run Daily Churn Scan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.result.interventionsStarted }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      },
+      "id": "has-interventions",
+      "name": "Any Interventions?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $env.SLACK_OPS_CHANNEL }}",
+        "text": "=🛡️ Daily Churn Scan\n• Accounts scanned: {{ $json.result.accountsScanned }}\n• Interventions started: {{ $json.result.interventionsStarted }}\n• Time: {{ $now.toISO() }}",
+        "otherOptions": {}
+      },
+      "id": "slack-with-interventions",
+      "name": "Notify: Interventions Active",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [900, 220]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $env.SLACK_OPS_CHANNEL }}",
+        "text": "=✅ Daily Churn Scan: All Clear\n• {{ $json.result.accountsScanned }} accounts checked — no at-risk accounts found.",
+        "otherOptions": {}
+      },
+      "id": "slack-all-clear",
+      "name": "Notify: All Clear",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [900, 380]
+    }
+  ],
+  "connections": {
+    "Daily 9:00 AM": {
+      "main": [
+        [{ "node": "Run Daily Churn Scan", "type": "main", "index": 0 }]
+      ]
+    },
+    "Run Daily Churn Scan": {
+      "main": [
+        [{ "node": "Any Interventions?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Any Interventions?": {
+      "main": [
+        [{ "node": "Notify: Interventions Active", "type": "main", "index": 0 }],
+        [{ "node": "Notify: All Clear", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true
+  },
+  "tags": ["titancrew", "meta-swarm", "churn", "daily"]
+}

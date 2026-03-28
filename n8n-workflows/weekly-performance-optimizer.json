@@ -1,0 +1,77 @@
+{
+  "name": "TitanCrew — Weekly Performance Optimizer",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "weekly-cron",
+      "name": "Every Sunday 3 AM UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.AGENT_API_URL }}/meta-swarm/trigger",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AGENT_API_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"event\": \"weekly_optimization\", \"priority\": \"low\" }",
+        "options": { "timeout": 300000 }
+      },
+      "id": "run-optimizer",
+      "name": "Run Performance Optimizer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $env.SLACK_OPS_CHANNEL }}",
+        "text": "=📊 Weekly Performance Optimization Complete\n• Agents analyzed: {{ $json.result.agentsAnalyzed }}\n• Variants deployed: {{ $json.result.variantsDeployed }}\n• Variants promoted: {{ $json.result.variantsPromoted }}\n• Variants rolled back: {{ $json.result.variantsRolledBack }}\n• Alerts escalated: {{ $json.result.alertsEscalated }}\nFounder report sent ✅",
+        "otherOptions": {}
+      },
+      "id": "notify-complete",
+      "name": "Notify Optimization Complete",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Every Sunday 3 AM UTC": {
+      "main": [
+        [{ "node": "Run Performance Optimizer", "type": "main", "index": 0 }]
+      ]
+    },
+    "Run Performance Optimizer": {
+      "main": [
+        [{ "node": "Notify Optimization Complete", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  },
+  "tags": ["titancrew", "meta-swarm", "performance", "weekly"]
+}
