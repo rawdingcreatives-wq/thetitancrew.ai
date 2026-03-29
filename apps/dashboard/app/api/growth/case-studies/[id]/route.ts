@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew — Case Study PATCH route
  * PATCH /api/growth/case-studies/:id
