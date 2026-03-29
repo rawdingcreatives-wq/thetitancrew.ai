@@ -379,6 +379,16 @@ app.post("/crews/trigger", requireAuth, async (req, res) => {
   return res.json({ routed: "customer_crew", event, accountId });
 });
 
+// GET /health — root health check (Railway proxy)
+app.get("/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    queueDepth: runQueue.length,
+    isProcessing,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // GET /meta-swarm/health
 app.get("/meta-swarm/health", (req, res) => {
   res.json({
@@ -454,7 +464,7 @@ function getNextSunday3am(): Date {
 
 // ─── Start Server ─────────────────────────────────────────
 
-const PORT = parseInt(process.env.AGENT_API_PORT ?? "3001", 10);
+const PORT = parseInt(process.env.PORT ?? process.env.AGENT_API_PORT ?? "3001", 10);
 
 if (require.main === module) {
   app.listen(PORT, () => {
