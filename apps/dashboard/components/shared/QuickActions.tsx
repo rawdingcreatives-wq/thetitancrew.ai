@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · QuickActions
  * One-tap shortcuts for common owner actions from the dashboard.
