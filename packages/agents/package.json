@@ -2,11 +2,11 @@
   "name": "@titancrew/meta-swarm",
   "version": "0.1.0",
   "private": true,
-  "description": "TitanCrew MetaSwarm — 5 autonomous meta-agents for business growth",
+  "description": "TitanCrew MetaSwarm — 5 autonomous meta-agents for business growth"
   "main": "MetaSwarmOrchestrator.ts",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only MetaSwarmOrchestrator.ts",
-    "start": "node dist/MetaSwarmOrchestrator.js",
+    "start": "node dist/meta-swarm/MetaSwarmOrchestrator.js",
     "build": "tsc || true",
     "test": "vitest run",
     "type-check": "tsc --noEmit"
