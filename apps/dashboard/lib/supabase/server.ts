@@ -40,3 +40,6 @@ export function createServiceClient() {
     { cookies: { getAll: () => [], setAll: () => {} } }
   );
 }
+
+// Alias for backward-compat with imports that use createServerClient
+export { createClient as createServerClient };
