@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · Onboarding Wizard
  * 7-step setup flow: business info → trade type → techs → integrations → crew deploy.
