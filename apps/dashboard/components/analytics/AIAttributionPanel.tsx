@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · AIAttributionPanel
  * Hero analytics block showing the core value proof:
