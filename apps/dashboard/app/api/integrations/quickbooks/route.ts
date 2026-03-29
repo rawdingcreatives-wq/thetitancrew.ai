@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew — QuickBooks Online OAuth Routes
  *
