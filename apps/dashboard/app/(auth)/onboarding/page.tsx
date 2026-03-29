@@ -92,11 +92,11 @@ export default function OnboardingPage() {
     if (!user) return;
 
     // Finalize account setup
-    const { data: account } = await supabase
-      .from("accounts")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: account } = await (supabase.from("accounts") as any)
       .select("id")
       .eq("owner_user_id", user.id)
-      .single();
+      .single() as { data: { id: string } | null };
 
     if (!account) return;
 
