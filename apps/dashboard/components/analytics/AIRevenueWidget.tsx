@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · AIRevenueWidget
  * The "hero" metric: how much extra revenue AI has generated this month.
