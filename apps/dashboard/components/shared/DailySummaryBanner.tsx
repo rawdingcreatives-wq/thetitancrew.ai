@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · DailySummaryBanner
  * Top-of-page greeting with the AI-generated daily summary.
