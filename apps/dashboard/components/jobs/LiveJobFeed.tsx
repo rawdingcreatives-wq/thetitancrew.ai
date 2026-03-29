@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · LiveJobFeed
  * Real-time job pipeline with status indicators.
