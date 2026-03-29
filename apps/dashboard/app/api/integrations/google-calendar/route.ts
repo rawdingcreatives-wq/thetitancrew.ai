@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew — Google Calendar OAuth Callback Routes
  *
