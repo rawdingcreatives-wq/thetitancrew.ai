@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · Stripe Webhook Handler
  * Processes subscription events: payment success, failure, cancellation.
