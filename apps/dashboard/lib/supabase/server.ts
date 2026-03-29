@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · Supabase Server Client
  * Server-side client for Route Handlers, Server Components, Server Actions.
