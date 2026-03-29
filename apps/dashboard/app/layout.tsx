@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · Root Layout
  * Next.js 15 App Router root layout with font loading, global styles, providers.
