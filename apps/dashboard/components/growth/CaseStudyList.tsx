@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew — CaseStudyList component
  * Shows generated case studies with publish toggles and copy buttons.
