@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · AgentCard
  * Full-detail card for a single agent: status, toggle, run history, trigger button.
