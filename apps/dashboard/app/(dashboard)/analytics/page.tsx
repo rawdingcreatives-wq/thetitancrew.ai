@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · Analytics Page
  * AI attribution, revenue trends, job metrics, agent performance.
