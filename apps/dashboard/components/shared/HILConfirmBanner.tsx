@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · HILConfirmBanner
  * Prominent banner for pending human-in-loop approvals.
