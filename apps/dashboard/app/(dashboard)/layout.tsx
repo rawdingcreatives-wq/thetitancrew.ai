@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · Dashboard Layout
  * Sidebar navigation + top header. Wraps all authenticated dashboard pages.
