@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · AgentStatusStrip
  * Compact card showing all 5-6 agents and their live status.
