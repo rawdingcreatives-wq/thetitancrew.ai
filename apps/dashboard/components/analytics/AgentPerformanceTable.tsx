@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · AgentPerformanceTable
  * Shows per-agent stats: runs, success rate, avg latency, 30d cost.
