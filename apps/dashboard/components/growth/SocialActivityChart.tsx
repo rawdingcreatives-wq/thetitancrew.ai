@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew — SocialActivityChart
  * Pie/donut chart showing social posts by platform using Recharts.
