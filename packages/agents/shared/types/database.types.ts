@@ -1,5 +1,5 @@
 // Supabase generated types for TitanCrew database
-// Generated from schema — update via: npx supabase gen types typescript
+// Covers all tables used by the agents package
 
 export type Json =
   | string
@@ -9,9 +9,23 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+// Generic table shape that Supabase's createClient<Database> accepts
+type AnyTable = {
+  Row: Record<string, unknown>;
+  Insert: Record<string, unknown>;
+  Update: Record<string, unknown>;
+  Relationships: unknown[];
+};
+
+type AnyFunction = {
+  Args: Record<string, unknown>;
+  Returns: unknown;
+};
+
 export type Database = {
   public: {
     Tables: {
+      // Named tables — typed for IDE support
       agent_memory: {
         Row: {
           id: string;
@@ -55,6 +69,130 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
+      };
+      agent_runs: {
+        Row: {
+          id: string;
+          agent_id: string;
+          account_id: string;
+          run_type: string;
+          trigger_event: string | null;
+          status: string;
+          started_at: string;
+          completed_at: string | null;
+          duration_ms: number | null;
+          tokens_used: number | null;
+          cost_usd: number | null;
+          actions_taken: number | null;
+          hil_requests: number | null;
+          error_message: string | null;
+          metadata: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          account_id: string;
+          run_type: string;
+          trigger_event?: string | null;
+          status?: string;
+          started_at?: string;
+          completed_at?: string | null;
+          duration_ms?: number | null;
+          tokens_used?: number | null;
+          cost_usd?: number | null;
+          actions_taken?: number | null;
+          hil_requests?: number | null;
+          error_message?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          agent_id?: string;
+          account_id?: string;
+          run_type?: string;
+          trigger_event?: string | null;
+          status?: string;
+          started_at?: string;
+          completed_at?: string | null;
+          duration_ms?: number | null;
+          tokens_used?: number | null;
+          cost_usd?: number | null;
+          actions_taken?: number | null;
+          hil_requests?: number | null;
+          error_message?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      hil_confirmations: {
+        Row: {
+          id: string;
+          account_id: string;
+          action_type: string;
+          risk_level: string;
+          description: string;
+          amount: number | null;
+          payload: Json | null;
+          sent_via: string;
+          sent_to: string;
+          status: string;
+          expires_at: string;
+          response_token: string;
+          twilio_sid: string | null;
+          responded_at: string | null;
+          rejection_reason: string | null;
+          phone: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          action_type: string;
+          risk_level: string;
+          description: string;
+          amount?: number | null;
+          payload?: Json | null;
+          sent_via: string;
+          sent_to: string;
+          status?: string;
+          expires_at: string;
+          response_token?: string;
+          twilio_sid?: string | null;
+          responded_at?: string | null;
+          rejection_reason?: string | null;
+          phone?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          action_type?: string;
+          risk_level?: string;
+          description?: string;
+          amount?: number | null;
+          payload?: Json | null;
+          sent_via?: string;
+          sent_to?: string;
+          status?: string;
+          expires_at?: string;
+          response_token?: string;
+          twilio_sid?: string | null;
+          responded_at?: string | null;
+          rejection_reason?: string | null;
+          phone?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       accounts: {
         Row: {
@@ -62,6 +200,7 @@ export type Database = {
           owner_id: string;
           company_name: string;
           plan: string;
+          phone: string | null;
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
           created_at: string;
@@ -72,6 +211,7 @@ export type Database = {
           owner_id: string;
           company_name: string;
           plan?: string;
+          phone?: string | null;
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           created_at?: string;
@@ -82,108 +222,16 @@ export type Database = {
           owner_id?: string;
           company_name?: string;
           plan?: string;
+          phone?: string | null;
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
-      jobs: {
-        Row: {
-          id: string;
-          account_id: string;
-          title: string;
-          status: string;
-          customer_name: string | null;
-          customer_email: string | null;
-          customer_phone: string | null;
-          scheduled_at: string | null;
-          completed_at: string | null;
-          notes: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          account_id: string;
-          title: string;
-          status?: string;
-          customer_name?: string | null;
-          customer_email?: string | null;
-          customer_phone?: string | null;
-          scheduled_at?: string | null;
-          completed_at?: string | null;
-          notes?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          account_id?: string;
-          title?: string;
-          status?: string;
-          customer_name?: string | null;
-          customer_email?: string | null;
-          customer_phone?: string | null;
-          scheduled_at?: string | null;
-          completed_at?: string | null;
-          notes?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-      conversations: {
-        Row: {
-          id: string;
-          account_id: string;
-          job_id: string | null;
-          channel: string;
-          status: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          account_id: string;
-          job_id?: string | null;
-          channel: string;
-          status?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          account_id?: string;
-          job_id?: string | null;
-          channel?: string;
-          status?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-      messages: {
-        Row: {
-          id: string;
-          conversation_id: string;
-          role: string;
-          content: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          conversation_id: string;
-          role: string;
-          content: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          conversation_id?: string;
-          role?: string;
-          content?: string;
-          created_at?: string;
-        };
-      };
+      // Catch-all for any other tables used in the codebase
+      [tableName: string]: AnyTable;
     };
     Views: {
       [_ in never]: never;
@@ -207,6 +255,8 @@ export type Database = {
         Args: { id: string };
         Returns: number;
       };
+      // Catch-all for other functions
+      [funcName: string]: AnyFunction;
     };
     Enums: {
       [_ in never]: never;
