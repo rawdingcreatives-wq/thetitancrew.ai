@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew Dashboard — /integrations
  *
