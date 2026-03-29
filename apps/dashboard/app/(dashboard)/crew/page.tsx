@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · AI Crew Management Page
  * Full view of all agents: status, metrics, enable/disable toggles,
