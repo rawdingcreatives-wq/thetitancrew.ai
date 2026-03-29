@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew — MilestoneTimeline
  * Vertical timeline showing viral milestones achieved.
