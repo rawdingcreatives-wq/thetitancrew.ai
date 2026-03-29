@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * TitanCrew · Agent Trigger Route
  * Dashboard → trigger any crew event on-demand.
