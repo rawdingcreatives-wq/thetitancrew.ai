@@ -88,7 +88,7 @@ export default async function DashboardPage() {
     .eq("owner_user_id", user.id)
     .single();
 
-  if (!account) redirect("/login");
+  if (!account) redirect("/onboarding");
 
   // Redirect to onboarding if not complete
   if (!account.crew_deployed_at && (account.onboard_step ?? 0) < 7) {
