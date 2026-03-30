@@ -38,18 +38,20 @@ const STEPS = [
   { id: 4, label: "ROI Preview",   icon: TrendingUp },
   { id: 5, label: "Calendar",      icon: Calendar   },
   { id: 6, label: "QuickBooks",    icon: FileText   },
-  { id: 7, label: "Meta / FB",     icon: null       }, // renders FbPill inline
+  { id: 7, label: "Social Media",  icon: null       }, // Coming soon — placeholder step
   { id: 8, label: "Phone",         icon: Phone      },
   { id: 9, label: "Deploy Crew",   icon: Rocket     },
 ];
 
 const TRADE_OPTIONS = [
-  { value: "plumbing",   label: "Plumbing",   emoji: "🔧" },
-  { value: "electrical", label: "Electrical", emoji: "⚡" },
-  { value: "hvac",       label: "HVAC",       emoji: "❄️" },
-  { value: "general",    label: "General",    emoji: "🏗️" },
-  { value: "roofing",    label: "Roofing",    emoji: "🏠" },
-  { value: "other",      label: "Other",      emoji: "🔨" },
+  { value: "plumbing",      label: "Plumbing",      emoji: "🔧" },
+  { value: "electrical",    label: "Electrical",    emoji: "⚡" },
+  { value: "hvac",          label: "HVAC",          emoji: "❄️" },
+  { value: "snow_plow",     label: "Snow Plow",     emoji: "🌨️" },
+  { value: "junk_removal",  label: "Junk Removal",  emoji: "🚛" },
+  { value: "general",       label: "General",       emoji: "🏗️" },
+  { value: "roofing",       label: "Roofing",       emoji: "🏠" },
+  { value: "other",         label: "Other",         emoji: "🔨" },
 ];
 
 const US_STATES = [
@@ -249,15 +251,16 @@ function OnboardingContent() {
 
   const startCalendar = () => {
     if (!accountId) return;
-    window.location.href = `/api/integrations/google-calendar?action=start&accountId=${accountId}`;
+    // Pass returnTo so OAuth callback lands back in onboarding (not /integrations)
+    window.location.href = `/api/integrations/google-calendar?action=start&returnTo=/onboarding`;
   };
   const startQBO = () => {
     if (!accountId) return;
-    window.location.href = `/api/integrations/quickbooks?action=start&accountId=${accountId}`;
+    window.location.href = `/api/integrations/quickbooks?action=start&returnTo=/onboarding`;
   };
+  // Meta / Facebook intentionally disabled — placeholder kept for future feature
   const startMeta = () => {
-    if (!accountId) return;
-    window.location.href = `/api/integrations/meta?action=start&accountId=${accountId}`;
+    alert("Social media integrations are coming soon. Skip this step for now.");
   };
 
   // ─────────────────────────────────────────────────────────────
@@ -319,7 +322,7 @@ function OnboardingContent() {
                 ) : Icon ? (
                   <Icon className="w-3 h-3 flex-shrink-0" />
                 ) : (
-                  <span className="text-[10px]">📘</span>
+                  <span className="text-[10px]">📣</span>
                 )}
                 <span className="hidden sm:inline">{s.label}</span>
               </span>
@@ -465,42 +468,45 @@ function OnboardingContent() {
             </Card>
           )}
 
-          {/* ═══ STEP 7 — Meta Business Suite ════════════════ */}
+          {/* ═══ STEP 7 — Social Media (Coming Soon) ════════ */}
           {step === 7 && (
-            <Card title="Connect Meta Business Suite" sub="Growth AI posts to your Facebook page, runs lead-gen, and responds to DMs 24/7.">
-              {metaConn ? (
-                <div className="space-y-4">
-                  <ConnBadge label="Meta Business Suite connected" />
-                  <div className="rounded-xl p-4 text-sm"
-                    style={{ background: "rgba(255,107,0,0.08)", border: "1px solid rgba(255,107,0,0.25)" }}>
-                    <p className="font-semibold text-[#FF9500]">🚀 First Post Ready</p>
-                    <p className="text-slate-300 text-xs mt-1">
-                      Growth AI will post a welcome message to your Facebook Business Page right after your crew launches.
-                    </p>
+            <Card title="Social Media Automation" sub="Growth AI will post deals, respond to leads, and share 5-star reviews automatically.">
+              <div className="space-y-4">
+                <div className="rounded-xl p-5 space-y-3"
+                  style={{ background: "rgba(26,39,68,0.6)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                      style={{ background: "rgba(255,107,0,0.12)", border: "1px solid rgba(255,107,0,0.25)" }}>
+                      📣
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white">Growth AI handles your social presence</p>
+                      <p className="text-xs text-slate-400">Facebook · Instagram · Google Business</p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
                   <Benefits items={[
-                    "📣 Auto-post deals & seasonal promotions",
-                    "💬 Respond to Facebook leads instantly — 24/7",
-                    "🎯 Run targeted local service ads automatically",
-                    "⭐ Share 5-star reviews to grow your reputation",
+                    "Auto-post seasonal promotions & completed jobs",
+                    "Respond to Facebook & Instagram DMs instantly",
+                    "Share 5-star reviews across your pages",
+                    "Run targeted local service ads automatically",
                   ]} />
-                  <button onClick={startMeta} disabled={!accountId}
-                    className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all duration-200"
-                    style={{ background: "#1877F2", boxShadow: "0 0 22px rgba(24,119,242,0.35)" }}>
-                    <FbIcon />
-                    Continue with Facebook Business
-                  </button>
-                  <div className="text-center">
-                    <p className="text-xs text-slate-600 font-mono">
-                      pages_manage_posts · pages_read_engagement · ads_management
-                    </p>
-                  </div>
-                  <SkipBtn onClick={() => setStep((s) => s + 1)} />
                 </div>
-              )}
+
+                <div className="rounded-xl px-4 py-3 flex items-center gap-3"
+                  style={{ background: "rgba(255,107,0,0.06)", border: "1px solid rgba(255,107,0,0.18)" }}>
+                  <span className="text-lg">🚀</span>
+                  <p className="text-xs text-[#FF9500]">
+                    <span className="font-bold">Coming in April 2026 —</span> social media integrations will be available to connect from your Settings page after launch.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setStep((s) => s + 1)}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold text-white transition-all duration-200"
+                  style={{ background: "linear-gradient(135deg, #FF6B00, #FF9500)", boxShadow: "0 0 20px rgba(255,107,0,0.3)" }}>
+                  Continue to Phone Setup →
+                </button>
+              </div>
             </Card>
           )}
 

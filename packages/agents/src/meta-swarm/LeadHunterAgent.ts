@@ -76,7 +76,7 @@ const tools: Anthropic.Tool[] = [
           type: "array",
           items: { type: "string" },
           description:
-            "Search keywords — e.g. ['plumber overwhelmed', 'HVAC scheduling nightmare', 'forgot to invoice']",
+            "Search keywords — e.g. ['plumber overwhelmed', 'HVAC scheduling nightmare', 'snow plow business scheduling', 'junk removal missed invoice', 'forgot to invoice']",
         },
         location: {
           type: "string",
@@ -330,7 +330,7 @@ async function executeTool(
       }
 
       // Trade type bonus for higher-value trades
-      const highValueTrades = ["hvac", "electrician", "plumber"];
+      const highValueTrades = ["hvac", "electrician", "plumber", "snow_plow", "junk_removal"];
       if (signal.tradeType && highValueTrades.includes(signal.tradeType.toLowerCase())) {
         score += 5;
       }
@@ -524,13 +524,13 @@ export async function runLeadHunterAgent(config?: {
 }): Promise<{ leadsFound: number; demosTriggered: number; dripsQueued: number }> {
   const {
     targetMarkets = ["Texas", "Florida", "California", "Georgia", "Arizona"],
-    tradeTypes = ["plumber", "HVAC", "electrician"],
+    tradeTypes = ["plumber", "HVAC", "electrician", "snow_plow", "junk_removal"],
     huntDepth = "standard",
   } = config ?? {};
 
   const sessionId = `hunt_${Date.now()}`;
 
-  const systemPrompt = `You are LeadHunterAgent — the autonomous lead acquisition engine for TitanCrew, a B2B SaaS platform that gives trade contractors (plumbers, HVAC, electricians) a 6-agent AI crew to run their business.
+  const systemPrompt = `You are LeadHunterAgent — the autonomous lead acquisition engine for TitanCrew, a B2B SaaS platform that gives trade contractors (plumbers, HVAC, electricians, snow plow operators, junk removal companies) a 6-agent AI crew to run their business.
 
 YOUR MISSION: Hunt for trade contractor pain signals on social platforms. Qualify, enrich, and route leads — high-score leads get a personalized demo video; medium-score leads go into email drip.
 

@@ -167,9 +167,12 @@ export function AgentCard({
           )}
 
           {locked && (
-            <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-lg font-medium flex-shrink-0">
-              Upgrade to Pro
-            </span>
+            <a
+              href="/pricing"
+              className="text-xs text-[#FF6B00] bg-orange-50 border border-orange-200 px-2 py-1 rounded-lg font-semibold flex-shrink-0 hover:bg-orange-100 transition-colors"
+            >
+              Upgrade →
+            </a>
           )}
         </div>
 

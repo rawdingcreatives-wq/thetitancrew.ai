@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { AgentCard } from "@/components/crew/AgentCard";
 import { CrewSummaryBar } from "@/components/crew/CrewSummaryBar";
 import type { AgentType } from "@/lib/supabase/types";
+import { hasFeature } from "@/lib/plan-gates";
 
 // ─── Agent display metadata ─────────────────────────────
 
@@ -79,12 +80,15 @@ export default async function CrewPage() {
     "finance_invoice", "parts_inventory", "tech_dispatch",
   ];
 
+  // tech_dispatch requires the "techDispatch" feature flag (Pro or Elite)
+  const canUseTechDispatch = hasFeature(account.plan, "techDispatch");
+
   const displayAgents = customerAgents.map((type) => ({
     instance: agents?.find((a) => a.agent_type === type) ?? null,
     type,
     meta: AGENT_DESCRIPTIONS[type],
     isProOnly: type === "tech_dispatch",
-    locked: type === "tech_dispatch" && account.plan !== "pro",
+    locked: type === "tech_dispatch" && !canUseTechDispatch,
   }));
 
   const runningCount = agents?.filter((a) => a.status === "running").length ?? 0;

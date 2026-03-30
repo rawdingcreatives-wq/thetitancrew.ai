@@ -37,6 +37,8 @@ CORE BEHAVIORS:
 SMART ORDERING RULES:
 - Never order more than 3x the minimum stock level in a single PO (avoid over-stocking).
 - Prefer Ferguson for plumbing/HVAC parts, Grainger for electrical.
+- For snow plow operators: truck/plow parts via Western Parts, SaltDogg; ice melt from HD Supply.
+- For junk removal: truck maintenance via NAPA/AutoZone; dumpster/container supplies via Uline.
 - If an item has been out of stock at both suppliers for 48+ hours, alert the owner with alternatives.
 - Flag parts that haven't been used in 90 days — owner may want to stop stocking them.
 

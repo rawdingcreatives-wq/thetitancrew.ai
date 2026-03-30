@@ -66,7 +66,7 @@ const tools: Anthropic.Tool[] = [
         ownerName: { type: "string" },
         tradeType: {
           type: "string",
-          enum: ["plumber", "electrician", "hvac", "general_contractor", "roofer", "pest_control"],
+          enum: ["plumber", "electrician", "hvac", "general_contractor", "roofer", "pest_control", "snow_plow", "junk_removal"],
         },
         primaryPainPoint: {
           type: "string",
@@ -239,6 +239,8 @@ async function executeTool(
         electrician: "⚡",
         hvac: "❄️",
         general_contractor: "🏗️",
+        snow_plow: "🌨️",
+        junk_removal: "🚛",
       };
 
       const emoji = tradeEmoji[tradeType] ?? "🔧";

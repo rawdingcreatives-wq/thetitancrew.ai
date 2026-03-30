@@ -585,6 +585,14 @@ async function executeTool(
           { title: "Bathroom remodel", description: "Full master bathroom renovation", amount: 8500 },
           { title: "Deck repair", description: "Replace rotted deck boards and posts", amount: 2100 },
         ],
+        snow_plow: [
+          { title: "Residential driveway snow clearing", description: "Remove 6+ inches of snow from driveway and walkway after storm", amount: 150 },
+          { title: "Commercial lot snow plowing", description: "Full parking lot plow + salt treatment, per visit", amount: 450 },
+        ],
+        junk_removal: [
+          { title: "Old furniture haul-away", description: "Remove and dispose of couch, dresser, and misc furniture", amount: 275 },
+          { title: "Construction debris cleanout", description: "Clear and haul renovation waste — drywall, wood, flooring", amount: 850 },
+        ],
       };
 
       const jobs = sampleJobs[tradeType] ?? sampleJobs.plumber;
