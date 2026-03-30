@@ -37,7 +37,7 @@ export function OnboardingChecklist() {
 
       const { data: acc } = await (supabase.from("accounts") as any)
         .select(
-          "crew_deployed_at, google_calendar_token, qbo_access_token, meta_access_token, onboard_step"
+          "crew_deployed_at, google_calendar_token, qbo_access_token, onboard_step"
         )
         .eq("owner_user_id", user.id)
         .single();
@@ -55,12 +55,6 @@ export function OnboardingChecklist() {
           id:    "qbo",
           label: "Connect QuickBooks",
           done:  !!acc.qbo_access_token,
-          href:  "/integrations",
-        },
-        {
-          id:    "meta",
-          label: "Connect Meta Business Suite",
-          done:  !!acc.meta_access_token,
           href:  "/integrations",
         },
         {

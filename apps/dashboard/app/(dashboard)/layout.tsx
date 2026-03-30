@@ -8,7 +8,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard,
   Briefcase,
@@ -46,9 +47,33 @@ const bottomNavItems = [
 
 // ─── Component ────────────────────────────────────────────
 
+const PLAN_LABELS: Record<string, { name: string; price: string }> = {
+  basic: { name: "Basic",    price: "$399/mo" },
+  pro:   { name: "Pro",      price: "$799/mo" },
+  elite: { name: "Elite",    price: "$1,299/mo" },
+};
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [planKey, setPlanKey] = useState<string>("basic");
+
+  useEffect(() => {
+    async function fetchPlan() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from("accounts")
+          .select("plan")
+          .eq("owner_user_id", user.id)
+          .single();
+        if (data?.plan) setPlanKey(data.plan);
+      } catch { /* non-critical */ }
+    }
+    fetchPlan();
+  }, []);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -108,13 +133,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         })}
 
         {/* Plan badge */}
-        <div className="mx-1 mt-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+        <Link href="/settings" className="block mx-1 mt-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
           <p className="text-xs text-slate-400">Current plan</p>
           <div className="flex items-center justify-between mt-0.5">
-            <span className="text-sm font-semibold text-white">Pro</span>
-            <span className="text-xs text-[#FF6B00] font-medium">$799/mo</span>
+            <span className="text-sm font-semibold text-white">{PLAN_LABELS[planKey]?.name ?? "Basic"}</span>
+            <span className="text-xs text-[#FF6B00] font-medium">{PLAN_LABELS[planKey]?.price ?? "$399/mo"}</span>
           </div>
-        </div>
+        </Link>
       </div>
     </div>
   );
