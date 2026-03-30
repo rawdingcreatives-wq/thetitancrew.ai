@@ -29,7 +29,7 @@ const STEPS = [
 
 const TRADE_OPTIONS = [
   { value: "plumbing",    label: "Plumbing",    emoji: "🔧" },
-  { value: "electrical",  label: "Electrical",  emoji: "⚡" },
+  { value: "electrical",  label: "Electrical",  emoji: "⚩" },
   { value: "hvac",        label: "HVAC",        emoji: "❄️" },
   { value: "general",     label: "General",     emoji: "🏗️" },
   { value: "roofing",     label: "Roofing",     emoji: "🏠" },
@@ -74,14 +74,18 @@ export default function OnboardingPage() {
 
   const handleNext = async () => {
     if (step < 7) {
-      // Save progress to Supabase
+      // Save progress to Supabase (upsert creates row if missing)
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from("accounts") as any).update({
+        await (supabase.from("accounts") as any).upsert({
           ...formData,
           onboard_step: step,
-        }).eq("owner_user_id", user.id);
+          owner_user_id: user.id,
+          email: user.email ?? "",
+          owner_name: formData.owner_name || user.email ?? "",
+          business_name: formData.business_name || "My Business",
+        }, { onConflict: "owner_user_id" });
       }
       setStep((s) => s + 1);
     }
@@ -92,26 +96,28 @@ export default function OnboardingPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Finalize account setup
+    // Finalize account setup — upsert ensures row exists even for fresh signups
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: account } = await (supabase.from("accounts") as any)
+    const { data: upsertedAccount } = await (supabase.from("accounts") as any)
+      .upsert({
+        ...formData,
+        onboard_step: 7,
+        crew_deployed_at: new Date().toISOString(),
+        owner_user_id: user.id,
+        email: user.email ?? "",
+        owner_name: formData.owner_name || user.email ?? "",
+        business_name: formData.business_name || "My Business",
+        notification_prefs: {
+          sms: formData.sms_notifications,
+          email: formData.email_notifications,
+          daily_summary: formData.daily_summary,
+        },
+      }, { onConflict: "owner_user_id" })
       .select("id")
-      .eq("owner_user_id", user.id)
       .single() as { data: { id: string } | null };
 
-    if (!account) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from("accounts") as any).update({
-      ...formData,
-      onboard_step: 7,
-      crew_deployed_at: new Date().toISOString(),
-      notification_prefs: {
-        sms: formData.sms_notifications,
-        email: formData.email_notifications,
-        daily_summary: formData.daily_summary,
-      },
-    }).eq("id", account.id);
+    if (!upsertedAccount) { setDeploying(false); return; }
+    const account = upsertedAccount;
 
     // Trigger Onboarder Agent → deploys all 6 agents
     await fetch("/api/agents/trigger", {
