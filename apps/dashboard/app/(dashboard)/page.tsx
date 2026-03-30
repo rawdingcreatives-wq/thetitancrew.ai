@@ -91,7 +91,7 @@ export default async function DashboardPage() {
   if (!account) redirect("/onboarding");
 
   // Redirect to onboarding if not complete
-  if (!account.crew_deployed_at && (account.onboard_step ?? 0) < 7) {
+  if (!account.crew_deployed_at && (account.onboard_step ?? 0) < 9) {
     redirect("/onboarding");
   }
 

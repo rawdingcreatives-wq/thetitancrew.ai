@@ -25,6 +25,7 @@ import {
   Bell,
   ChevronRight,
 } from "lucide-react";
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 
 // ─── Navigation items ──────────────────────────────────────
 
@@ -177,6 +178,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+
+      {/* Onboarding progress widget — fixed bottom-right, auto-hides when complete */}
+      <OnboardingChecklist />
     </div>
   );
 }
