@@ -165,11 +165,12 @@ function OnboardingContent() {
           trade_type:        form.trade_type,
           tech_count:        form.tech_count,
           avg_job_value:     form.avg_job_value,
-          roi_technicians:   form.roi_technicians,
-          roi_jobs_per_week: form.roi_jobs_per_week,
-          roi_avg_job_value: form.roi_avg_job_value,
-          roi_admin_hours:   form.roi_admin_hours,
-          onboard_step:      s,
+          roi_technicians:    form.roi_technicians,
+          roi_jobs_per_week:  form.roi_jobs_per_week,
+          roi_avg_job_value:  form.roi_avg_job_value,
+          roi_admin_hours:    form.roi_admin_hours,
+          twilio_phone_number: form.twilio_phone || null,
+          onboard_step:       s,
         },
         { onConflict: "owner_user_id" }
       )
@@ -207,6 +208,7 @@ function OnboardingContent() {
             roi_jobs_per_week: form.roi_jobs_per_week,
             roi_avg_job_value: form.roi_avg_job_value,
             roi_admin_hours:   form.roi_admin_hours,
+            twilio_phone_number: form.twilio_phone || null,
             onboard_step:      TOTAL,
             crew_deployed_at:  new Date().toISOString(),
             notification_prefs: {
