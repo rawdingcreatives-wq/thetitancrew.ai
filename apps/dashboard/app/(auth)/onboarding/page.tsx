@@ -29,7 +29,7 @@ const STEPS = [
 
 const TRADE_OPTIONS = [
   { value: "plumbing",    label: "Plumbing",    emoji: "🔧" },
-  { value: "electrical",  label: "Electrical",  emoji: "⚩" },
+  { value: "electrical",  label: "Electrical",  emoji: "⚡" },
   { value: "hvac",        label: "HVAC",        emoji: "❄️" },
   { value: "general",     label: "General",     emoji: "🏗️" },
   { value: "roofing",     label: "Roofing",     emoji: "🏠" },
@@ -75,16 +75,22 @@ export default function OnboardingPage() {
   const handleNext = async () => {
     if (step < 7) {
       // Save progress to Supabase (upsert creates row if missing)
+      // Only include columns that exist in the accounts table
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from("accounts") as any).upsert({
-          ...formData,
-          onboard_step: step,
           owner_user_id: user.id,
           email: user.email ?? "",
           owner_name: formData.owner_name || user.email ?? "",
           business_name: formData.business_name || "My Business",
+          phone: formData.phone || null,
+          city: formData.city || null,
+          state: formData.state || null,
+          trade_type: formData.trade_type,
+          tech_count: formData.tech_count,
+          avg_job_value: formData.avg_job_value,
+          onboard_step: step,
         }, { onConflict: "owner_user_id" });
       }
       setStep((s) => s + 1);
@@ -93,46 +99,59 @@ export default function OnboardingPage() {
 
   const handleDeploy = async () => {
     setDeploying(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setDeploying(false); return; }
 
-    // Finalize account setup — upsert ensures row exists even for fresh signups
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: upsertedAccount } = await (supabase.from("accounts") as any)
-      .upsert({
-        ...formData,
-        onboard_step: 7,
-        crew_deployed_at: new Date().toISOString(),
-        owner_user_id: user.id,
-        email: user.email ?? "",
-        owner_name: formData.owner_name || user.email ?? "",
-        business_name: formData.business_name || "My Business",
-        notification_prefs: {
-          sms: formData.sms_notifications,
-          email: formData.email_notifications,
-          daily_summary: formData.daily_summary,
-        },
-      }, { onConflict: "owner_user_id" })
-      .select("id")
-      .single() as { data: { id: string } | null };
+      // Finalize account setup — only valid DB columns, no formData spread
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: upsertedAccount } = await (supabase.from("accounts") as any)
+        .upsert({
+          owner_user_id: user.id,
+          email: user.email ?? "",
+          owner_name: formData.owner_name || user.email ?? "",
+          business_name: formData.business_name || "My Business",
+          phone: formData.phone || null,
+          city: formData.city || null,
+          state: formData.state || null,
+          trade_type: formData.trade_type,
+          tech_count: formData.tech_count,
+          avg_job_value: formData.avg_job_value,
+          onboard_step: 7,
+          crew_deployed_at: new Date().toISOString(),
+          notification_prefs: {
+            sms: formData.sms_notifications,
+            email: formData.email_notifications,
+            daily_summary: formData.daily_summary,
+          },
+        }, { onConflict: "owner_user_id" })
+        .select("id")
+        .single() as { data: { id: string } | null };
 
-    if (!upsertedAccount) { setDeploying(false); return; }
-    const account = upsertedAccount;
+      if (!upsertedAccount) { setDeploying(false); return; }
 
-    // Trigger Onboarder Agent → deploys all 6 agents
-    await fetch("/api/agents/trigger", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        accountId: account.id,
-        event: "onboard_new_customer",
-        payload: { ...formData },
-      }),
-    });
+      // Fire-and-forget — don't block completion on agent trigger
+      fetch("/api/agents/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: upsertedAccount.id,
+          event: "onboard_new_customer",
+          payload: {
+            business_name: formData.business_name,
+            trade_type: formData.trade_type,
+            tech_count: formData.tech_count,
+          },
+        }),
+      }).catch(() => {});
 
-    // Show completion animation for 2.5 seconds then redirect
-    setDeployDone(true);
-    setTimeout(() => router.push("/"), 2500);
+      // Show completion animation for 2.5 seconds then redirect
+      setDeployDone(true);
+      setTimeout(() => router.push("/"), 2500);
+    } catch (err) {
+      console.error("Deploy error:", err);
+      setDeploying(false);
+    }
   };
 
   return (
