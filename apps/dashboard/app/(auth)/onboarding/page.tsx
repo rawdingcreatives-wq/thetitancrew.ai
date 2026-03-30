@@ -82,7 +82,7 @@ export default function OnboardingPage() {
         await (supabase.from("accounts") as any).upsert({
           owner_user_id: user.id,
           email: user.email ?? "",
-          owner_name: formData.owner_name || user.email ?? "",
+          owner_name: formData.owner_name || (user.email ?? ""),
           business_name: formData.business_name || "My Business",
           phone: formData.phone || null,
           city: formData.city || null,
@@ -109,7 +109,7 @@ export default function OnboardingPage() {
         .upsert({
           owner_user_id: user.id,
           email: user.email ?? "",
-          owner_name: formData.owner_name || user.email ?? "",
+          owner_name: formData.owner_name || (user.email ?? ""),
           business_name: formData.business_name || "My Business",
           phone: formData.phone || null,
           city: formData.city || null,
