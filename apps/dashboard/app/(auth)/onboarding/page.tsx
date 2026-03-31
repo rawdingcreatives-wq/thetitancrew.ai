@@ -72,6 +72,7 @@ function OnboardingContent() {
   const supabase = createClient();
 
   const [step,       setStep]       = useState(1);
+  const [navigating, setNavigating] = useState(false); // debounce nav buttons
   const [deploying,  setDeploying]  = useState(false);
   const [deployDone, setDeployDone] = useState(false);
   const [accountId,  setAccountId]  = useState<string | null>(null);
@@ -183,8 +184,16 @@ function OnboardingContent() {
   };
 
   const handleNext = async () => {
+    if (navigating) return;
+    setNavigating(true);
     await saveProgress(step);
     setStep((s) => Math.min(s + 1, TOTAL));
+    setTimeout(() => setNavigating(false), 600);
+  const handleSkipStep = () => {
+    if (navigating) return;
+    setNavigating(true);
+    setStep((s) => Math.min(s + 1, TOTAL));
+    setTimeout(() => setNavigating(false), 600);
   };
 
   const handleDeploy = async () => {
@@ -444,7 +453,7 @@ function OnboardingContent() {
                     Connect Google Calendar
                   </button>
                   <Benefits items={["Scheduler AI books jobs directly into your calendar","Real-time sync prevents double-bookings","Automated reminders sent to techs"]} />
-                  <SkipBtn onClick={() => setStep((s) => s + 1)} />
+                  <SkipBtn onClick={handleSkipStep} disabled={navigating} />
                 </div>
               )}
             </Card>
@@ -462,7 +471,7 @@ function OnboardingContent() {
                     Connect QuickBooks Online
                   </button>
                   <Benefits items={["Auto-generate invoices after every job","Sync payments and flag late accounts","Finance AI reports in your morning briefing"]} />
-                  <SkipBtn onClick={() => setStep((s) => s + 1)} />
+                  <SkipBtn onClick={handleSkipStep} disabled={navigating} />
                 </div>
               )}
             </Card>
@@ -547,7 +556,7 @@ function OnboardingContent() {
                   </div>
                 ))}
               </div>
-              <SkipBtn onClick={handleNext} label="Skip — set up phone later in Settings" />
+              <SkipBtn onClick={handleNext} label="Skip — set up phone later in Settings" disabled={navigating} />
             </Card>
           )}
 
@@ -624,9 +633,9 @@ function OnboardingContent() {
                 <ChevronLeft className="w-4 h-4" />Back
               </button>
 
-              <button onClick={handleNext} disabled={!canProceed()}
+              <button onClick={handleNext} disabled={!canProceed() || navigating}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                  canProceed()
+                  canProceed() && !navigating
                     ? "bg-[#FF6B00] text-white shadow-[0_0_16px_rgba(255,107,0,0.35)] hover:bg-[#E55A00]"
                     : "bg-white/[0.07] text-slate-500 border border-white/10 cursor-not-allowed"
                 }`}>
