@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       {
         error: "Price ID not configured",
         hint: `Set STRIPE_PRICE_${planKey.toUpperCase()} in environment variables`,
-      }
+      },
       { status: 503 }
     );
   }
