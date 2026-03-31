@@ -88,13 +88,17 @@ export function AgentCard({
   const isEnabled = instance?.is_enabled ?? false;
 
   const handleToggle = async () => {
-    if (locked || !instance) return;
+    if (locked) return;
     setToggling(true);
     try {
       await fetch(`/api/agents/toggle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: instance.id, enabled: !isEnabled }),
+        body: JSON.stringify(
+          instance
+            ? { agentId: instance.id, enabled: !isEnabled }
+            : { agentType, enabled: true }
+        ),
       });
       router.refresh();
     } finally {
