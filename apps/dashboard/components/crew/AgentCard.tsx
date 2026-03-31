@@ -65,7 +65,7 @@ const AGENT_LABELS: Record<string, string> = {
   tech_dispatch: "Tech Dispatch",
 };
 
-const STATUS_CONFIG: Record<AgentStatus, { label: string; dot: string; badge: string }> = {
+const STATUS_CONFIG = {
   idle:          { label: "Idle",      dot: "bg-slate-300",            badge: "text-slate-600 bg-slate-100" },
   running:       { label: "Running",   dot: "bg-blue-500 agent-pulse", badge: "text-blue-700 bg-blue-100" },
   waiting_human: { label: "Waiting",   dot: "bg-amber-400 agent-pulse",badge: "text-amber-700 bg-amber-100" },
@@ -75,34 +75,42 @@ const STATUS_CONFIG: Record<AgentStatus, { label: string; dot: string; badge: st
 
 export function AgentCard({
   agentType, instance, tagline, features, isProOnly, locked, recentRuns, accountId
-}: AgentCardProps) {
+}) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  // Optimistic enabled state so toggle visually responds instantly
+  const [optimisticEnabled, setOptimisticEnabled] = useState(null);
 
   const Icon = AGENT_ICONS[agentType] ?? Bot;
   const label = AGENT_LABELS[agentType] ?? agentType;
   const status = instance?.status ?? "disabled";
   const statusConfig = STATUS_CONFIG[status];
-  const isEnabled = instance?.is_enabled ?? false;
+  const isEnabled = optimisticEnabled !== null ? optimisticEnabled : (instance?.is_enabled ?? false);
 
   const handleToggle = async () => {
     if (locked) return;
+    const newEnabled = !isEnabled;
+    setOptimisticEnabled(newEnabled); // instant visual update
     setToggling(true);
     try {
-      await fetch(`/api/agents/toggle`, {
+      await fetch("/api/agents/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           instance
-            ? { agentId: instance.id, enabled: !isEnabled }
-            : { agentType, enabled: true }
+            ? { agentId: instance.id, enabled: newEnabled }
+            : { agentType, enabled: newEnabled }
         ),
       });
       router.refresh();
+    } catch {
+      setOptimisticEnabled(null); // revert on error
     } finally {
       setToggling(false);
+      // Clear optimistic state after server data arrives
+      setTimeout(() => setOptimisticEnabled(null), 1000);
     }
   };
 
@@ -205,8 +213,8 @@ export function AgentCard({
                     const mins = Math.floor(diff / 60000);
                     const hrs = Math.floor(mins / 60);
                     if (mins < 1) return "just now";
-                    if (hrs < 1) return `${mins}m ago`;
-                    return `${hrs}h ago`;
+                    if (hrs < 1) return mins + "m ago";
+                    return hrs + "h ago";
                   })()}
                 </p>
                 <p className="text-xs text-slate-400">last run</p>
@@ -248,7 +256,6 @@ export function AgentCard({
       {/* Expanded: features + recent runs */}
       {expanded && (
         <div className="border-t border-slate-50">
-          {/* Features */}
           {features.length > 0 && (
             <div className="px-4 pt-3 pb-2">
               <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Capabilities</p>
@@ -263,7 +270,6 @@ export function AgentCard({
             </div>
           )}
 
-          {/* Recent runs */}
           {recentRuns.length > 0 && (
             <div className="px-4 pt-2 pb-3 border-t border-slate-50">
               <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Recent Runs</p>
