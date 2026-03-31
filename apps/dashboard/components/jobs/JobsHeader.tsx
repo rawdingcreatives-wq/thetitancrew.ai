@@ -31,18 +31,30 @@ export function JobsHeader({ accountId, technicians }: JobsHeaderProps) {
     customer_phone: "",
   });
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, ok) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleCreate = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await fetch("/api/jobs", {
+      const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, accountId }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to create job");
       setShowNewJob(false);
       setForm({ title: "", job_type: "service", priority: "2", estimate_amount: "", technician_id: "", address: "", customer_name: "", customer_phone: "" });
+      showToast("Job created successfully!", true);
       router.refresh();
+    } catch (err) {
+      showToast(err.message ?? "Could not create job. Please try again.", false);
     } finally {
       setSaving(false);
     }
@@ -50,6 +62,11 @@ export function JobsHeader({ accountId, technicians }: JobsHeaderProps) {
 
   return (
     <>
+      {toast && (
+        <div className={`fixed top-4 right-4 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white transition-all ${toast.ok ? "bg-emerald-600" : "bg-red-600"}`}>
+          {toast.ok ? "✓" : "✕"} {toast.msg}
+        </div>
+      )}
       <div className="bg-white border-b border-slate-200 px-4 lg:px-6 py-4 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-extrabold text-[#1A2744]">Jobs Pipeline</h1>
@@ -69,7 +86,6 @@ export function JobsHeader({ accountId, technicians }: JobsHeaderProps) {
         </div>
       </div>
 
-      {/* New Job Modal */}
       {showNewJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
