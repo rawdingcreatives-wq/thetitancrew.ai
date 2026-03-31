@@ -6,7 +6,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Package, AlertTriangle, CheckCircle2, TrendingDown, Plus, Zap } from "lucide-react";
+import { Package, AlertTriangle, CheckCircle2, TrendingDown, Zap } from "lucide-react";
+import { AddPartButton } from "@/components/inventory/AddPartButton";
 
 export default async function InventoryPage() {
   const supabase = await createClient();
@@ -41,10 +42,7 @@ export default async function InventoryPage() {
           <h1 className="text-2xl font-extrabold text-[#1A2744]">Inventory</h1>
           <p className="text-sm text-slate-500 mt-1">Parts, materials, and AI reorder alerts</p>
         </div>
-        <button className="flex items-center gap-2 bg-[#FF6B00] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors shadow-sm">
-          <Plus className="w-4 h-4" />
-          Add Part
-        </button>
+        <AddPartButton accountId={account.id} />
       </div>
 
       {/* Stats */}
