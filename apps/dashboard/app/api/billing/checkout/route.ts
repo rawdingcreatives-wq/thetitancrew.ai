@@ -20,9 +20,9 @@ const STRIPE_SECRET    = process.env.STRIPE_SECRET_KEY  ?? "";
 
 // Stripe Price IDs — set these in your Vercel env vars after creating products in Stripe dashboard
 const PRICE_IDS: Record<string, string> = {
-  basic: process.env.STRIPE_PRICE_BASIC ?? "",
-  pro:   process.env.STRIPE_PRICE_PRO   ?? "",
-  elite: process.env.STRIPE_PRICE_ELITE ?? "",
+  basic: process.env.STRIPE_BASIC_PRICE_ID ?? process.env.STRIPE_PRICE_BASIC ?? "",
+  pro:   process.env.STRIPE_PRO_PRICE_ID   ?? process.env.STRIPE_PRICE_PRO   ?? "",
+  elite: process.env.STRIPE_ELITE_PRICE_ID ?? process.env.STRIPE_PRICE_ELITE ?? "",
 };
 
 export async function POST(req: NextRequest) {
