@@ -16,9 +16,15 @@ interface QuickActionsProps {
 
 export function QuickActions({ accountId }: QuickActionsProps) {
   const router = useRouter();
-  const [triggering, setTriggering] = useState<string | null>(null);
+  const [triggering, setTriggering] = useState(null);
+  const [toast, setToast] = useState(null);
 
-  const triggerAgent = async (event: string, label: string) => {
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const triggerAgent = async (event, label) => {
     setTriggering(event);
     try {
       const res = await fetch("/api/agents/trigger", {
@@ -27,10 +33,13 @@ export function QuickActions({ accountId }: QuickActionsProps) {
         body: JSON.stringify({ accountId, event, payload: {} }),
       });
       if (res.ok) {
+        showToast("✓ " + label + " triggered — your crew is on it!");
         router.refresh();
+      } else {
+        showToast("Could not reach the AI crew. Try again in a moment.");
       }
     } catch (err) {
-      console.error(`Trigger ${event} failed:`, err);
+      showToast("Could not reach the AI crew. Check your connection.");
     } finally {
       setTimeout(() => setTriggering(null), 1500);
     }
@@ -69,6 +78,11 @@ export function QuickActions({ accountId }: QuickActionsProps) {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 agent-card p-4">
+      {toast && (
+        <div className="mb-3 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-3 py-2 font-medium">
+          {toast}
+        </div>
+      )}
       <h3 className="text-sm font-bold text-[#1A2744] mb-3">Quick Actions</h3>
       <div className="grid grid-cols-2 gap-2">
         {actions.map((action) => {
