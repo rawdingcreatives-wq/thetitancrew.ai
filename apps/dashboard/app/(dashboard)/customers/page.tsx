@@ -70,9 +70,17 @@ export default async function CustomersPage() {
 
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-6xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-extrabold text-[#1A2744]">Customers</h1>
-        <p className="text-sm text-slate-500 mt-1">Every customer your crew has served</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold text-[#1A2744]">Customers</h1>
+          <p className="text-sm text-slate-500 mt-1">Every customer your crew has served</p>
+        </div>
+        <a
+          href="/jobs"
+          className="flex items-center gap-2 bg-[#FF6B00] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors shadow-sm"
+        >
+          + Add Job (adds customer)
+        </a>
       </div>
 
       {/* Stats row */}
