@@ -189,6 +189,8 @@ function OnboardingContent() {
     await saveProgress(step);
     setStep((s) => Math.min(s + 1, TOTAL));
     setTimeout(() => setNavigating(false), 600);
+  };
+
   const handleSkipStep = () => {
     if (navigating) return;
     setNavigating(true);
