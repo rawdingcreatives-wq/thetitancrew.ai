@@ -2,10 +2,13 @@
 "use client";
 
 /**
- * TitanCrew · Supabase Realtime Hooks
+ * TitanCrew Â· Supabase Realtime Hooks
  *
  * Custom hooks for real-time subscriptions to Supabase tables.
- * Used across the dashboard for live KPIs, agent status, job updates.
+ * Table names match Phase 0 schema:
+ *   - agent_instances (not account_agents)
+ *   - hil_confirmations (not hil_queue)
+ *   - trade_customers (not customers)
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -13,7 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
-// useRealtimeQuery - Subscribe to any table and get live updates
+// âââ useRealtimeQuery ââââââââââââââââââââââââââââââââââââââââ
 
 interface RealtimeQueryOptions {
   select?: string;
@@ -22,7 +25,10 @@ interface RealtimeQueryOptions {
   limit?: number;
 }
 
-export function useRealtimeQuery<T = any>(table: string, options: RealtimeQueryOptions = {}) {
+export function useRealtimeQuery<T = any>(
+  table: string,
+  options: RealtimeQueryOptions = {}
+) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +44,7 @@ export function useRealtimeQuery<T = any>(table: string, options: RealtimeQueryO
     if (options.limit) query = query.limit(options.limit);
 
     const { data: result, error: queryError } = await query;
-    if (queryError) { setError(queryError.message); }
+    if (queryError) setError(queryError.message);
     else { setData((result ?? []) as T[]); setError(null); }
     setLoading(false);
   }, [table, options.select, options.filter?.column, options.filter?.value, options.orderBy?.column, options.limit]);
@@ -46,14 +52,17 @@ export function useRealtimeQuery<T = any>(table: string, options: RealtimeQueryO
   useEffect(() => {
     if (!supabaseRef.current) supabaseRef.current = createClient();
     const supabase = supabaseRef.current;
+
     fetchData();
 
-    const channelName = "realtime:" + table + ":" + (options.filter?.column ?? "all") + ":" + (options.filter?.value ?? "all");
+    const channelName = `realtime:${table}:${options.filter?.column ?? "all"}:${options.filter?.value ?? "all"}`;
     const channel = supabase
       .channel(channelName)
       .on("postgres_changes", {
-        event: "*", schema: "public", table,
-        ...(options.filter ? { filter: options.filter.column + "=eq." + options.filter.value } : {}),
+        event: "*",
+        schema: "public",
+        table,
+        ...(options.filter ? { filter: `${options.filter.column}=eq.${options.filter.value}` } : {}),
       }, () => fetchData())
       .subscribe();
 
@@ -63,7 +72,7 @@ export function useRealtimeQuery<T = any>(table: string, options: RealtimeQueryO
   return { data, loading, error, refetch: fetchData };
 }
 
-// useRealtimeKPIs - Real-time dashboard KPIs for a specific account
+// âââ useRealtimeKPIs âââââââââââââââââââââââââââââââââââââââââ
 
 interface AccountKPIs {
   totalJobs: number;
@@ -89,16 +98,16 @@ export function useRealtimeKPIs(accountId: string) {
     const supabase = supabaseRef.current;
 
     const [jobsRes, agentsRes, approvalsRes, customersRes] = await Promise.all([
-      supabase.from("jobs").select("id, status, amount").eq("account_id", accountId),
-      supabase.from("account_agents").select("agent_type").eq("account_id", accountId).eq("enabled", true),
-      supabase.from("hil_queue").select("id").eq("account_id", accountId).eq("status", "pending"),
-      supabase.from("customers").select("id").eq("account_id", accountId),
+      supabase.from("jobs").select("id, status, total_amount").eq("account_id", accountId),
+      supabase.from("agent_instances").select("agent_type").eq("account_id", accountId).eq("is_enabled", true),
+      supabase.from("hil_confirmations").select("id").eq("account_id", accountId).eq("status", "pending"),
+      supabase.from("trade_customers").select("id").eq("account_id", accountId),
     ]);
 
     const jobs = jobsRes.data ?? [];
-    const completed = jobs.filter((j) => j.status === "completed");
-    const pending = jobs.filter((j) => j.status === "scheduled" || j.status === "in_progress");
-    const revenue = completed.reduce((sum, j) => sum + (j.amount ?? 0), 0);
+    const completed = jobs.filter((j) => j.status === "completed" || j.status === "invoiced" || j.status === "paid");
+    const pending = jobs.filter((j) => j.status === "scheduled" || j.status === "dispatched" || j.status === "in_progress");
+    const revenue = completed.reduce((sum, j) => sum + (j.total_amount ?? 0), 0);
 
     setKpis({
       totalJobs: jobs.length,
@@ -118,10 +127,10 @@ export function useRealtimeKPIs(accountId: string) {
     const supabase = supabaseRef.current;
     fetchKpis();
 
-    const tables = ["jobs", "account_agents", "hil_queue", "customers"];
+    const tables = ["jobs", "agent_instances", "hil_confirmations", "trade_customers"];
     const channels = tables.map((t) =>
-      supabase.channel("kpis:" + t + ":" + accountId)
-        .on("postgres_changes", { event: "*", schema: "public", table: t, filter: "account_id=eq." + accountId }, () => fetchKpis())
+      supabase.channel(`kpis:${t}:${accountId}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: t, filter: `account_id=eq.${accountId}` }, () => fetchKpis())
         .subscribe()
     );
     return () => { channels.forEach((ch) => supabase.removeChannel(ch)); };
@@ -130,7 +139,7 @@ export function useRealtimeKPIs(accountId: string) {
   return { kpis, loading, refetch: fetchKpis };
 }
 
-// useRealtimeAdminKPIs - Global admin dashboard KPIs
+// âââ useRealtimeAdminKPIs ââââââââââââââââââââââââââââââââââââ
 
 interface AdminKPIs {
   totalAccounts: number;
@@ -155,21 +164,16 @@ export function useRealtimeAdminKPIs() {
 
     const [accountsRes, approvalsRes] = await Promise.all([
       supabase.from("accounts").select("id, subscription_status, mrr, plan"),
-      supabase.from("hil_queue").select("id").eq("status", "pending"),
+      supabase.from("hil_confirmations").select("id").eq("status", "pending"),
     ]);
 
     const accounts = accountsRes.data ?? [];
-    const active = accounts.filter((a) => a.subscription_status === "active");
-    const trialing = accounts.filter((a) => a.subscription_status === "trialing");
-    const pastDue = accounts.filter((a) => a.subscription_status === "past_due");
-    const mrr = accounts.reduce((sum, a) => sum + (a.mrr ?? 0), 0);
-
     setKpis({
       totalAccounts: accounts.length,
-      activeAccounts: active.length,
-      totalMRR: mrr,
-      trialingAccounts: trialing.length,
-      pastDueAccounts: pastDue.length,
+      activeAccounts: accounts.filter((a) => a.subscription_status === "active").length,
+      totalMRR: accounts.reduce((sum, a) => sum + (a.mrr ?? 0), 0),
+      trialingAccounts: accounts.filter((a) => a.subscription_status === "trialing").length,
+      pastDueAccounts: accounts.filter((a) => a.subscription_status === "past_due").length,
       pendingApprovals: approvalsRes.data?.length ?? 0,
     });
     setLoading(false);
@@ -182,9 +186,8 @@ export function useRealtimeAdminKPIs() {
 
     const channel = supabase.channel("admin-kpis")
       .on("postgres_changes", { event: "*", schema: "public", table: "accounts" }, () => fetchKpis())
-      .on("postgres_changes", { event: "*", schema: "public", table: "hil_queue" }, () => fetchKpis())
+      .on("postgres_changes", { event: "*", schema: "public", table: "hil_confirmations" }, () => fetchKpis())
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [fetchKpis]);
 
