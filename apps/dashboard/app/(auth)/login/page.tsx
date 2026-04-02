@@ -17,8 +17,13 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
     if (error) {
       setError(error.message);
       setLoading(false);
@@ -37,15 +42,23 @@ export default function LoginPage() {
             <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
           <div>
-            <span className="text-[#1A2744] font-extrabold text-2xl tracking-tight">Titan</span>
-            <span className="text-[#FF6B00] font-extrabold text-2xl tracking-tight">Crew</span>
+            <span className="text-[#1A2744] font-extrabold text-2xl tracking-tight">
+              Titan
+            </span>
+            <span className="text-[#FF6B00] font-extrabold text-2xl tracking-tight">
+              Crew
+            </span>
           </div>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
-          <h1 className="text-2xl font-bold text-[#1A2744] mb-1">Welcome back</h1>
-          <p className="text-slate-500 text-sm mb-6">Sign in to your TitanCrew dashboard</p>
+          <h1 className="text-2xl font-bold text-[#1A2744] mb-1">
+            Welcome back
+          </h1>
+          <p className="text-slate-500 text-sm mb-6">
+            Sign in to your TitanCrew dashboard
+          </p>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -70,7 +83,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+                placeholder="â¢â¢â¢â¢â¢â¢â¢â¢"
                 required
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/40 focus:border-[#FF6B00] transition-colors text-sm"
               />
@@ -99,7 +112,10 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-4 text-right">
-            <a href="/forgot-password" className="text-xs text-slate-400 hover:text-[#FF6B00]">
+            <a
+              href="/forgot-password"
+              className="text-xs text-slate-400 hover:text-[#FF6B00]"
+            >
               Forgot password?
             </a>
           </div>
@@ -107,12 +123,15 @@ export default function LoginPage() {
           <div className="mt-6 pt-6 border-t border-slate-100 text-center space-y-2">
             <p className="text-xs text-slate-400">
               Don&apos;t have an account?{" "}
-              <a href="/signup" className="text-[#FF6B00] font-medium hover:underline">
+              <a
+                href="/signup"
+                className="text-[#FF6B00] font-medium hover:underline"
+              >
                 Start free trial
               </a>
             </p>
             <p className="text-xs text-slate-300">
-              TitanCrew \u2014 AI Crew for Trade Businesses
+              TitanCrew â AI Crew for Trade Businesses
             </p>
           </div>
         </div>
