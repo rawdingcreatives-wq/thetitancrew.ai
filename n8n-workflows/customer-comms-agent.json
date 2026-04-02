@@ -1,0 +1,266 @@
+{
+  "name": "TitanCrew Â· Customer Comms Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 15 }]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_API_URL }}/crews/trigger",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-titancrew-secret",
+              "value": "={{ $env.AGENT_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "event",
+              "value": "comms_sweep"
+            },
+            {
+              "name": "payload",
+              "value": "={{ JSON.stringify({ triggerType: 'scheduled', sweepTypes: ['appointment_reminders', 'follow_ups', 'review_requests'] }) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-pending-comms",
+      "name": "Trigger Comms Sweep",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [470, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_URL }}/api/agents/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AGENT_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "event_type",
+              "value": "progress"
+            },
+            {
+              "name": "agent_type",
+              "value": "customer_comm"
+            },
+            {
+              "name": "account_id",
+              "value": "={{ $json.accountId }}"
+            },
+            {
+              "name": "data",
+              "value": "={{ JSON.stringify({ phase: 'appointment_reminders', sent: $json.remindersSent ?? 0, queued: $json.remindersQueued ?? 0 }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-appointment-reminders",
+      "name": "Send Appointment Reminders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [470, 400],
+      "notes": "24h and 2h reminders for upcoming appointments. All drafted for owner approval via HIL queue."
+    },     {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_API_URL }}/crews/trigger",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-titancrew-secret",
+              "value": "={{ $env.AGENT_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "event",
+              "value": "reengagement_sweep"
+            },
+            {
+              "name": "payload",
+              "value": "={{ JSON.stringify({ triggerType: 'scheduled', lookbackDays: 90, maxContacts: 10 }) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "reengagement-sweep",
+      "name": "Re-engagement Sweep",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [700, 300],
+      "notes": "Reaches out to past customers who haven't had service in 90+ days. Drafts personalized follow-up SMS for owner approval."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_API_URL }}/crews/trigger",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-titancrew-secret",
+              "value": "={{ $env.AGENT_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "event",
+              "value": "review_request_sweep"
+            },
+            {
+              "name": "payload",
+              "value": "={{ JSON.stringify({ triggerType: 'scheduled', completedWithin: 48, maxRequests: 5 }) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "review-requests",
+      "name": "Review Request Sweep",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [700, 500],
+      "notes": "Sends review requests 24-48h after job completion. Max 1 request per customer per job. Respects opt-out list."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_URL }}/api/agents/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AGENT_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "event_type",
+              "value": "completed"
+            },
+            {
+              "name": "agent_type",
+              "value": "customer_comm"
+            },
+            {
+              "name": "data",
+              "value": "={{ JSON.stringify({ summary: 'Comms sweep completed', reminders: $json.reminderCount ?? 0, reengagements: $json.reengagementCount ?? 0, reviews: $json.reviewCount ?? 0 }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-completion",
+      "name": "Log Completion to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [930, 300]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          { "node": "Trigger Comms Sweep", "type": "main", "index": 0 },
+          { "node": "Send Appointment Reminders", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Trigger Comms Sweep": {
+      "main": [
+        [
+          { "node": "Re-engagement Sweep", "type": "main", "index": 0 },
+          { "node": "Review Request Sweep", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Re-engagement Sweep": {
+      "main": [
+        [{ "node": "Log Completion to Dashboard", "type": "main", "index": 0 }]
+      ]
+    },
+    "Review Request Sweep": {
+      "main": [
+        [{ "node": "Log Completion to Dashboard", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "customer-crew" },
+    { "name": "comms" },
+    { "name": "production" }
+  ]
+}
