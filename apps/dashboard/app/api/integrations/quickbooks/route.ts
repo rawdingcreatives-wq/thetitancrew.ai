@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
         "Authorization": `Basic ${credentials}`,
       },
       body: new URLSearchParams({ token: tokenToRevoke }),
-    }).catch(() => {});
+    }).catch((err) => console.error("[QuickBooks] Token revocation failed:", err));
   }
 
   await supabase.from("accounts").update({

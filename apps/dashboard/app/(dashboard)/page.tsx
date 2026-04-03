@@ -14,15 +14,13 @@ import { AgentStatusStrip } from "@/components/crew/AgentStatusStrip";
 import { HILConfirmBanner } from "@/components/shared/HILConfirmBanner";
 import { QuickActions } from "@/components/shared/QuickActions";
 import { MetricsRow } from "@/components/analytics/MetricsRow";
-import type { Database } from "@/lib/supabase/types";
-
 // ─── Data fetching ────────────────────────────────────────
 
 async function getDashboardData(accountId: string) {
   const supabase = await createClient();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const todayStart = new Date(now.setHours(0, 0, 0, 0)).toISOString();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
   const [accountRes, jobsRes, agentsRes, hilRes] = await Promise.all([
     supabase
@@ -62,7 +60,7 @@ async function getDashboardData(accountId: string) {
     .gte("scheduled_start", todayStart)
     .in("status", ["scheduled", "in_progress", "completed", "invoiced", "paid"]);
 
-  const todayRevenue = (todayJobs ?? []).reduce((s, j) => s + (j.invoice_amount ?? j.invoice_amount ?? 0), 0);
+  const todayRevenue = (todayJobs ?? []).reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
 
   return {
     account: accountRes.data,

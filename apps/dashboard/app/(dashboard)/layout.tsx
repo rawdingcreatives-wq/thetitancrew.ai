@@ -25,7 +25,10 @@ import {
   Zap,
   Bell,
   ChevronRight,
+  LogOut,
+  User,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 
 // ─── Navigation items ──────────────────────────────────────
@@ -55,8 +58,13 @@ const PLAN_LABELS: Record<string, { name: string; price: string }> = {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [planKey, setPlanKey] = useState<string>("basic");
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [userInitials, setUserInitials] = useState("TC");
+  const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
     async function fetchPlan() {
@@ -64,15 +72,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+        // Set user initials from email
+        const email = user.email ?? "";
+        setUserEmail(email);
+        const initials = email.split("@")[0].slice(0, 2).toUpperCase();
+        setUserInitials(initials || "TC");
         const { data } = await supabase
           .from("accounts")
           .select("plan")
           .eq("owner_user_id", user.id)
           .single();
         if (data?.plan) setPlanKey(data.plan);
-      } catch { /* non-critical */ }
+      } catch (err) { console.error("[DashboardLayout] Failed to fetch plan:", err); }
     }
     fetchPlan();
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push("/login");
+    } catch {
+      router.push("/login");
+    }
+  };
+
+  // Close user menu and bell when clicking outside
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-user-menu]")) setUserMenuOpen(false);
+      if (!target.closest("[data-bell-menu]")) setBellOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
   const isActive = (href: string) =>
@@ -132,14 +166,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           );
         })}
 
-        {/* Plan badge */}
-        <Link href="/settings" className="block mx-1 mt-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
+        {/* Plan badge (info only — Settings link is already in bottomNavItems) */}
+        <div className="block mx-1 mt-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
           <p className="text-xs text-slate-400">Current plan</p>
           <div className="flex items-center justify-between mt-0.5">
             <span className="text-sm font-semibold text-white">{PLAN_LABELS[planKey]?.name ?? "Basic"}</span>
             <span className="text-xs text-[#FF6B00] font-medium">{PLAN_LABELS[planKey]?.price ?? "$399/mo"}</span>
           </div>
-        </Link>
+        </div>
       </div>
     </div>
   );
@@ -185,15 +219,103 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <div className="flex items-center gap-3">
             {/* Notifications bell */}
-            <button className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors">
-              <Bell className="w-5 h-5 text-slate-500" />
-              {/* Unread dot */}
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF6B00] rounded-full" />
-            </button>
+            <div className="relative" data-bell-menu>
+              <button
+                onClick={() => setBellOpen((o) => !o)}
+                className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                aria-label="Notifications"
+              >
+                <Bell className="w-5 h-5 text-slate-500" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF6B00] rounded-full" />
+              </button>
 
-            {/* Avatar */}
-            <div className="w-8 h-8 bg-[#1A2744] rounded-full flex items-center justify-center text-white text-sm font-semibold">
-              TC
+              {bellOpen && (
+                <div
+                  className="absolute right-0 top-10 w-80 rounded-xl bg-white shadow-xl border border-slate-100 z-50 overflow-hidden"
+                  style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}
+                >
+                  <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-sm font-bold text-[#1A2744]">Notifications</span>
+                    <span className="text-xs text-[#FF6B00] font-semibold bg-orange-50 px-2 py-0.5 rounded-full">1 new</span>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    <div className="px-4 py-3 hover:bg-slate-50 transition-colors cursor-pointer">
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-2 h-2 bg-[#FF6B00] rounded-full flex-shrink-0 mt-1.5" />
+                        <div>
+                          <p className="text-xs font-semibold text-[#1A2744]">AI Crew deployed</p>
+                          <p className="text-xs text-slate-500 mt-0.5">Your 6-agent crew is active and monitoring your business 24/7.</p>
+                          <p className="text-xs text-slate-400 mt-1">Just now</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 text-center">
+                      <p className="text-xs text-slate-400">More notifications will appear as your crew takes action.</p>
+                    </div>
+                  </div>
+                  <div className="px-4 py-2.5 border-t border-slate-100">
+                    <button
+                      onClick={() => setBellOpen(false)}
+                      className="text-xs text-slate-500 hover:text-slate-700 w-full text-center transition-colors"
+                    >
+                      Mark all as read
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* User menu */}
+            <div className="relative" data-user-menu>
+              <button
+                onClick={() => setUserMenuOpen((o) => !o)}
+                className="w-8 h-8 bg-[#1A2744] rounded-full flex items-center justify-center text-white text-sm font-semibold hover:bg-[#243358] transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF6B00] focus:ring-offset-1"
+                aria-label="User menu"
+              >
+                {userInitials}
+              </button>
+
+              {userMenuOpen && (
+                <div
+                  className="absolute right-0 top-10 w-56 rounded-xl bg-white shadow-xl border border-slate-100 z-50 overflow-hidden"
+                  style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}
+                >
+                  {/* User info */}
+                  <div className="px-4 py-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 bg-[#1A2744] rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+                        {userInitials}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-[#1A2744] truncate">{userEmail || "Account"}</p>
+                        <p className="text-xs text-slate-400 capitalize">{PLAN_LABELS[planKey]?.name ?? "Basic"} plan</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Menu items */}
+                  <div className="py-1">
+                    <Link
+                      href="/settings"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-[#1A2744] transition-colors"
+                    >
+                      <Settings className="w-4 h-4 text-slate-400" />
+                      Settings
+                    </Link>
+                  </div>
+
+                  <div className="border-t border-slate-100 py-1">
+                    <button
+                      onClick={handleSignOut}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -213,21 +335,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 // ─── Breadcrumb title helper ──────────────────────────────
 
 function BreadcrumbTitle({ pathname }: { pathname: string }) {
-  const labels: Record<string, string> = {
-    "/": "Dashboard",
-    "/jobs": "Jobs Pipeline",
-    "/crew": "AI Crew",
-    "/analytics": "Analytics",
-    "/schedule": "Schedule",
-    "/customers": "Customers",
-    "/inventory": "Inventory",
-    "/finance": "Finance",
-    "/settings": "Settings",
-  };
+  // Ordered from most specific to least specific for correct matching
+  const labels: [string, string][] = [
+    ["/settings/billing", "Billing"],
+    ["/settings/integrations", "Integrations"],
+    ["/settings/team", "Team Settings"],
+    ["/settings", "Settings"],
+    ["/jobs", "Jobs Pipeline"],
+    ["/crew", "AI Crew"],
+    ["/analytics", "Analytics"],
+    ["/schedule", "Schedule"],
+    ["/customers", "Customers"],
+    ["/inventory", "Inventory"],
+    ["/finance", "Finance"],
+  ];
 
-  const label = Object.entries(labels).find(([key]) =>
-    key === "/" ? pathname === "/" : pathname.startsWith(key)
-  )?.[1] ?? "TitanCrew";
+  let label = "Dashboard";
+  if (pathname !== "/") {
+    const match = labels.find(([key]) => pathname.startsWith(key));
+    if (match) label = match[1];
+  }
 
   return (
     <div className="flex items-center gap-2">

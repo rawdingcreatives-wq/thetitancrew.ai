@@ -47,8 +47,8 @@ export default function CaseStudyList({ caseStudies, accountId }: Props) {
           )
         );
       }
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error("[CaseStudyList] Failed to toggle publish status:", err);
     } finally {
       setPublishing(null);
     }

@@ -80,25 +80,37 @@ export function AgentCard({
   const [expanded, setExpanded] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  // Optimistic enabled state so toggle visually responds instantly
+  const [optimisticEnabled, setOptimisticEnabled] = useState<boolean | null>(null);
 
   const Icon = AGENT_ICONS[agentType] ?? Bot;
   const label = AGENT_LABELS[agentType] ?? agentType;
   const status = instance?.status ?? "disabled";
   const statusConfig = STATUS_CONFIG[status];
-  const isEnabled = instance?.is_enabled ?? false;
+  const isEnabled = optimisticEnabled !== null ? optimisticEnabled : (instance?.is_enabled ?? false);
 
   const handleToggle = async () => {
-    if (locked || !instance) return;
+    if (locked) return;
+    const newEnabled = !isEnabled;
+    setOptimisticEnabled(newEnabled); // instant visual update
     setToggling(true);
     try {
       await fetch(`/api/agents/toggle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: instance.id, enabled: !isEnabled }),
+        body: JSON.stringify(
+          instance
+            ? { agentId: instance.id, enabled: newEnabled }
+            : { agentType, enabled: newEnabled }
+        ),
       });
       router.refresh();
+    } catch {
+      setOptimisticEnabled(null); // revert on error
     } finally {
       setToggling(false);
+      // Clear optimistic state after server data arrives
+      setTimeout(() => setOptimisticEnabled(null), 1000);
     }
   };
 

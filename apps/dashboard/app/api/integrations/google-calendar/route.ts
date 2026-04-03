@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
   if (account.google_calendar_token) {
     await fetch(`https://oauth2.googleapis.com/revoke?token=${account.google_calendar_token}`, {
       method: "POST",
-    }).catch(() => {});
+    }).catch((err) => console.error("[Google Calendar] Token revocation failed:", err));
   }
 
   // Clear all Google fields

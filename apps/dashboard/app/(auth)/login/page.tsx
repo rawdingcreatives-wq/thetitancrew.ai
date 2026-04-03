@@ -20,7 +20,14 @@ export default function LoginPage() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setError(error.message);
+      // Handle specific error types for better UX
+      if (error.status === 429) {
+        setError("Too many login attempts. Please wait a moment and try again.");
+      } else if (error.message?.toLowerCase().includes("invalid login")) {
+        setError("Invalid email or password. Please check your credentials.");
+      } else {
+        setError(error.message);
+      }
       setLoading(false);
     } else {
       router.push("/");
@@ -98,11 +105,17 @@ export default function LoginPage() {
             </button>
           </form>
 
+          <div className="mt-4 text-right">
+            <a href="/forgot-password" className="text-xs text-slate-400 hover:text-[#FF6B00]">
+              Forgot password?
+            </a>
+          </div>
+
           <div className="mt-6 pt-6 border-t border-slate-100 text-center space-y-2">
             <p className="text-xs text-slate-400">
               Don&apos;t have an account?{" "}
-              <a href="/onboarding" className="text-[#FF6B00] font-medium hover:underline">
-                Get started
+              <a href="/signup" className="text-[#FF6B00] font-medium hover:underline">
+                Start free trial
               </a>
             </p>
             <p className="text-xs text-slate-300">

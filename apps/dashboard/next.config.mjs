@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     transpilePackages: ["@titancrew/agents", "@titancrew/shared"],
+    // TODO: Remove these suppressions once @ts-nocheck is removed from all files
+    // and TypeScript/ESLint errors are properly resolved across the codebase.
     typescript: {
           ignoreBuildErrors: true,
     },
@@ -28,7 +30,7 @@ const nextConfig = {
                 ],
     },
     env: {
-          NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "https://app.titancrew.ai",
+          NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "https://thetitancrew-bfzoq9i6e-stephen-rawding.vercel.app",
     },
 };
 export default nextConfig;

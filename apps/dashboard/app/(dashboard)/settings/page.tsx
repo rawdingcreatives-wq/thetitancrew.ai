@@ -11,6 +11,7 @@ import {
   CheckCircle2, XCircle, ExternalLink, Shield, Bell, Zap,
   ArrowUpRight, Lock
 } from "lucide-react";
+import ManageBillingButton from "@/components/billing/ManageBillingButton";
 
 // ─── Trade label map ──────────────────────────────────────────────────────────
 const TRADE_LABELS: Record<string, string> = {
@@ -163,16 +164,19 @@ export default async function SettingsPage() {
             </p>
           </div>
 
-          {plan.isBasic && (
-            <a
-              href="/pricing"
-              className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
-              style={{ background: "linear-gradient(135deg, #FF6B00, #FF9500)", boxShadow: "0 0 16px rgba(255,107,0,0.35)" }}
-            >
-              <ArrowUpRight className="w-4 h-4" />
-              Upgrade to Pro
-            </a>
-          )}
+          <div className="flex flex-col gap-2 flex-shrink-0">
+            {plan.isBasic && (
+              <a
+                href="/pricing"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #FF6B00, #FF9500)", boxShadow: "0 0 16px rgba(255,107,0,0.35)" }}
+              >
+                <ArrowUpRight className="w-4 h-4" />
+                Upgrade to Pro
+              </a>
+            )}
+            <ManageBillingButton />
+          </div>
         </div>
 
         {/* Basic vs Pro feature comparison (shown for Basic users) */}

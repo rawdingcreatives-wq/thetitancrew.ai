@@ -48,8 +48,8 @@ export function DailySummaryBanner({ businessName, ownerName }: DailySummaryBann
         if (runs && runs.length > 0 && runs[0].output_summary) {
           setSummary(runs[0].output_summary);
         }
-      } catch {
-        // Fail silently — banner is non-critical
+      } catch (err) {
+        console.error("[DailySummaryBanner] Failed to fetch summary:", err);
       } finally {
         setLoading(false);
       }
