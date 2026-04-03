@@ -11,10 +11,22 @@
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Zap, Mail, ArrowRight, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function CheckEmailPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0F1B2D] flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-[#FF6B00] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <CheckEmailContent />
+    </Suspense>
+  );
+}
+
+function CheckEmailContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") ?? "";
   const [resending, setResending] = useState(false);
