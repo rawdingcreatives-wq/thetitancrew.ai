@@ -95,7 +95,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Back to dashboard */}
       <Link
-        href="/"
+        href="/home"
         className="flex items-center gap-2 px-5 py-2.5 text-xs text-slate-400 hover:text-white transition-colors border-b border-white/5"
       >
         <ArrowLeft className="w-3 h-3" />

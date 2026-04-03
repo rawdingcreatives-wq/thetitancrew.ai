@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://app.titancrew.ai",
+    url: "https://titancrew.ai",
     siteName: "TitanCrew",
     title: "TitanCrew — AI Crew for Trade Businesses",
     description: "Automate your trade business back-office with AI agents. Deploy in 5 minutes.",
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     description: "AI crew for trade contractors. Schedule, invoice, reorder parts — automatically.",
     creator: "@TitanCrewAI",
   },
-  robots: { index: false, follow: false }, // Dashboard is private
+  robots: { index: true, follow: true },
 };
 
 export const viewport: Viewport = {

@@ -28,7 +28,7 @@ export default function NotFound() {
         {/* Actions */}
         <div className="flex items-center justify-center gap-3">
           <Link
-            href="/"
+            href="/home"
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#FF6B00] hover:bg-[#e55f00] text-white text-sm font-semibold rounded-lg transition-colors"
           >
             <Home className="w-4 h-4" />

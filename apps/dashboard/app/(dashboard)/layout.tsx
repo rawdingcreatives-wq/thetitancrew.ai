@@ -34,7 +34,7 @@ import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist
 // ─── Navigation items ──────────────────────────────────────
 
 const navItems = [
-  { label: "Dashboard",   href: "/",            icon: LayoutDashboard },
+  { label: "Dashboard",   href: "/home",         icon: LayoutDashboard },
   { label: "Jobs",        href: "/jobs",         icon: Briefcase },
   { label: "AI Crew",     href: "/crew",         icon: Bot },
   { label: "Analytics",   href: "/analytics",    icon: BarChart3 },
@@ -110,7 +110,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    href === "/home" ? pathname === "/home" : pathname.startsWith(href);
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -351,7 +351,7 @@ function BreadcrumbTitle({ pathname }: { pathname: string }) {
   ];
 
   let label = "Dashboard";
-  if (pathname !== "/") {
+  if (pathname !== "/home" && pathname !== "/") {
     const match = labels.find(([key]) => pathname.startsWith(key));
     if (match) label = match[1];
   }

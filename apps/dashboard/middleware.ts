@@ -6,13 +6,22 @@
  * 1. Refreshes the Supabase auth session (keeps cookies alive).
  * 2. Redirects unauthenticated users away from protected routes.
  * 3. Redirects authenticated users away from auth pages.
+ * 4. Serves the landing page at "/" for unauthenticated visitors.
  */
 
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // ─── Route definitions ──────────────────────────────────────
-const PUBLIC_ROUTES = ["/login", "/signup", "/forgot-password", "/auth/callback", "/landing"];
+const PUBLIC_ROUTES = [
+  "/login",
+  "/signup",
+  "/signup/confirm",
+  "/forgot-password",
+  "/auth/callback",
+  "/landing",
+];
+
 const AUTH_ROUTES = ["/login", "/signup", "/forgot-password"];
 
 // API routes that should be accessible without authentication (webhooks, etc.)
@@ -23,6 +32,8 @@ const PUBLIC_API_ROUTES = [
 ];
 
 function isPublicRoute(pathname: string) {
+  // Root "/" is public (landing page for visitors)
+  if (pathname === "/") return true;
   return PUBLIC_ROUTES.some((r) => pathname.startsWith(r));
 }
 
@@ -92,17 +103,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // ── Authenticated user trying to access auth pages ──
+  // ── Authenticated user trying to access auth pages → go to dashboard ──
   if (user && isAuthRoute(pathname)) {
     const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = "/";
+    homeUrl.pathname = "/home";
     return NextResponse.redirect(homeUrl);
   }
 
   return supabaseResponse;
 }
 
-// ─── Matcher: skip static files, images, favicon, api routes ─
+// ─── Matcher: skip static files, images, favicon ────────────
 export const config = {
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",

@@ -50,7 +50,7 @@ export default function GlobalError({
             Try Again
           </button>
           <a
-            href="/"
+            href="/home"
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/15 text-white text-sm font-medium rounded-lg transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

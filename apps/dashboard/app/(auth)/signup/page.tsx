@@ -45,8 +45,7 @@ export default function SignupPage() {
       setError(signUpError.message);
       setLoading(false);
     } else {
-      router.push("/onboarding");
-      router.refresh();
+      router.push(`/signup/confirm?email=${encodeURIComponent(email)}`);
     }
   };
 

@@ -30,7 +30,7 @@ const nextConfig = {
                 ],
     },
     env: {
-          NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "https://thetitancrew-bfzoq9i6e-stephen-rawding.vercel.app",
+          NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "https://titancrew.ai",
     },
 };
 export default nextConfig;
