@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * TitanCrew · Settings Page
+ * TitanCrew Â· Settings Page
  * Account info, integrations status, plan & billing, notifications.
  */
 
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import ManageBillingButton from "@/components/billing/ManageBillingButton";
 
-// ─── Trade label map ──────────────────────────────────────────────────────────
+// âââ Trade label map ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 const TRADE_LABELS: Record<string, string> = {
   plumbing:     "Plumbing",
   electrical:   "Electrical",
@@ -48,7 +48,7 @@ export default async function SettingsPage() {
   };
   const plan = planConfig[account.plan as string] ?? planConfig.basic;
 
-  const tradeLabel = TRADE_LABELS[account.trade_type as string] ?? (account.trade_type ?? "—");
+  const tradeLabel = TRADE_LABELS[account.trade_type as string] ?? (account.trade_type ?? "â");
 
   const integrations = [
     {
@@ -113,11 +113,11 @@ export default async function SettingsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Business Name</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.business_name || "—"}</p>
+            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.business_name || "â"}</p>
           </div>
           <div>
             <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Owner</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.owner_name || "—"}</p>
+            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.owner_name || "â"}</p>
           </div>
           <div>
             <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Trade Type</label>
@@ -125,15 +125,15 @@ export default async function SettingsPage() {
           </div>
           <div>
             <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Phone</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.phone || "—"}</p>
+            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.phone || "â"}</p>
           </div>
           <div>
             <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Email</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{user.email || "—"}</p>
+            <p className="text-sm font-semibold text-[#1A2744] mt-1">{user.email || "â"}</p>
           </div>
           <div>
             <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Member Since</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.created_at ? formatDate(account.created_at) : "—"}</p>
+            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.created_at ? formatDate(account.created_at) : "â"}</p>
           </div>
         </div>
         <a
@@ -158,7 +158,7 @@ export default async function SettingsPage() {
               <Zap className="w-3.5 h-3.5" />
               TitanCrew {plan.label}
             </span>
-            <p className="text-xs text-slate-400">{plan.price} · Renews monthly</p>
+            <p className="text-xs text-slate-400">{plan.price} Â· Renews monthly</p>
             <p className="text-xs text-slate-500">
               Crew deployed: {account.crew_deployed_at ? formatDate(account.crew_deployed_at) : "Not yet"}
             </p>
@@ -202,7 +202,7 @@ export default async function SettingsPage() {
               href="/pricing"
               className="inline-flex items-center gap-1 mt-3 text-xs font-bold text-[#FF6B00] hover:underline"
             >
-              See full comparison → <ArrowUpRight className="w-3 h-3" />
+              See full comparison â <ArrowUpRight className="w-3 h-3" />
             </a>
           </div>
         )}
@@ -253,7 +253,7 @@ export default async function SettingsPage() {
                     href={integration.connectHref}
                     className="flex items-center gap-1 text-xs text-[#FF6B00] font-semibold bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200 hover:bg-orange-100 transition-colors flex-shrink-0"
                   >
-                    Connect →
+                    Connect â
                   </a>
                 )}
               </div>
@@ -270,7 +270,7 @@ export default async function SettingsPage() {
           <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full ml-auto">Coming Soon</span>
         </div>
         <p className="text-sm text-slate-500">
-          Configure how your AI crew alerts you — SMS, email, or in-app. Full notification settings available in the next release.
+          Configure how your AI crew alerts you â SMS, email, or in-app. Full notification settings available in the next release.
         </p>
       </div>
     </div>
