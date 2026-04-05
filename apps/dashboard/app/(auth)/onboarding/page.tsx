@@ -418,12 +418,12 @@ function OnboardingContent() {
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">$</span>
                   <input type="number" className={INPUT + " pl-7"} value={form.avg_job_value}
                     onChange={(e) => { const v = parseInt(e.target.value) || 0; upd("avg_job_value", v); upd("roi_avg_job_value", v); }} />
-                </div>
+                  </div>
               </Field>
             </Card>
           )}
 
-          {/* ═══ STEP 4 — ROI Calculator ══════════════════════ */}
+          {/* ═══ STEP 4 — ROI Calculator ═════════════════════ */}
           {step === 4 && (
             <ROICalculator
               initialData={{
@@ -461,7 +461,7 @@ function OnboardingContent() {
             </Card>
           )}
 
-          {/* ═══ STEP 6 — QuickBooks ══════════════════════════ */}
+          {/* ═══ STEP 2 — QuickBooks ══════════════════════════ */}
           {step === 6 && (
             <Card title="Connect QuickBooks Online" sub="Finance AI auto-creates invoices, syncs payments, and chases late accounts.">
               {qboConn ? (
@@ -479,7 +479,7 @@ function OnboardingContent() {
             </Card>
           )}
 
-          {/* ═══ STEP 7 — Social Media (Coming Soon) ════════ */}
+          {/* ═══ STEP 2 — Social Media (Coming Soon) ════════ */}
           {step === 7 && (
             <Card title="Social Media Automation" sub="Growth AI will post deals, respond to leads, and share 5-star reviews automatically.">
               <div className="space-y-4">
@@ -488,7 +488,7 @@ function OnboardingContent() {
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
                       style={{ background: "rgba(255,107,0,0.12)", border: "1px solid rgba(255,107,0,0.25)" }}>
-                      📣
+                       📣
                     </div>
                     <div>
                       <p className="text-sm font-bold text-white">Growth AI handles your social presence</p>
