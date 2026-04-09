@@ -12,6 +12,7 @@ import {
   ArrowUpRight, Lock
 } from "lucide-react";
 import ManageBillingButton from "@/components/billing/ManageBillingButton";
+import ProfileEditForm from "@/components/settings/ProfileEditForm";
 
 // âââ Trade label map ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 const TRADE_LABELS: Record<string, string> = {
@@ -104,46 +105,7 @@ export default async function SettingsPage() {
         <p className="text-sm text-slate-500 mt-1">Account, integrations, and preferences</p>
       </div>
 
-      {/* Business profile */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Building2 className="w-4 h-4 text-[#1A2744]" />
-          <h2 className="text-sm font-bold text-[#1A2744] uppercase tracking-wider">Business Profile</h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Business Name</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.business_name || "â"}</p>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Owner</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.owner_name || "â"}</p>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Trade Type</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{tradeLabel}</p>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Phone</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.phone || "â"}</p>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Email</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{user.email || "â"}</p>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Member Since</label>
-            <p className="text-sm font-semibold text-[#1A2744] mt-1">{account.created_at ? formatDate(account.created_at) : "â"}</p>
-          </div>
-        </div>
-        <a
-          href="/onboarding"
-          className="inline-flex items-center gap-2 mt-2 text-xs font-semibold text-[#FF6B00] hover:underline"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          Update business info in setup wizard
-        </a>
-      </div>
+      <ProfileEditForm account={account} userEmail={user.email ?? ''} />
 
       {/* Plan & Billing */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
