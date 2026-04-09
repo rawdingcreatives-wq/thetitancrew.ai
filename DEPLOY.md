@@ -128,7 +128,7 @@ TWILIO_PHONE_NUMBER=+15125550100
 3. Service name: `titancrew-agents`
 4. Root directory: `/packages/agents`
 5. Build command: `pnpm build`
-6. Start command: `node dist/meta-swarm/MetaSwarmOrchestrator.js`
+6. Start command: `node dist/src/meta-swarm/MetaSwarmOrchestrator.js`
 
 ### 4b. Set environment variables
 Railway → titancrew-agents → Variables → Add all from the complete env list below.
