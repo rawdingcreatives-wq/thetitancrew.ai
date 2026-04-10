@@ -20,6 +20,8 @@ export type AgentType =
 export type AgentStatus = "idle" | "running" | "waiting_human" | "error" | "disabled";
 export type JobStatus = "lead" | "scheduled" | "dispatched" | "in_progress" | "completed" | "invoiced" | "paid" | "canceled";
 export type TradeType = "plumbing" | "electrical" | "hvac" | "general" | "roofing" | "other";
+export type ReceiptStatus = "uploaded" | "parsing" | "parsed" | "attributed" | "disposed" | "error";
+export type MaterialDisposition = "used_on_job" | "leftover_return_to_truck" | "wasted";
 
 // ─── Standalone row type aliases (no circular Database refs) ──────────────────
 
@@ -177,6 +179,52 @@ export type TechnicianRow = {
 
 // ─── Database interface ───────────────────────────────────────────────────────
 
+// ─── Receipt row types ──────────────────────────────────────────────────────
+export type ReceiptRow = {
+  id: string;
+  account_id: string;
+  job_id: string | null;
+  uploaded_by: string;
+  storage_path: string;
+  original_filename: string | null;
+  status: ReceiptStatus;
+  vendor_name: string | null;
+  receipt_date: string | null;
+  subtotal: number | null;
+  tax_amount: number | null;
+  total_amount: number | null;
+  payment_method: string | null;
+  receipt_number: string | null;
+  raw_parse_json: Json | null;
+  parse_confidence: number | null;
+  parse_error: string | null;
+  agent_run_id: string | null;
+  parsed_at: string | null;
+  attributed_at: string | null;
+  disposed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReceiptLineItemRow = {
+  id: string;
+  receipt_id: string;
+  account_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number | null;
+  line_total: number | null;
+  sku: string | null;
+  upc: string | null;
+  part_id: string | null;
+  job_id: string | null;
+  disposition: MaterialDisposition | null;
+  disposed_quantity: number | null;
+  disposition_notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -214,6 +262,16 @@ export interface Database {
         Row: TechnicianRow;
         Insert: Partial<TechnicianRow> & { name: string; account_id: string };
         Update: Partial<TechnicianRow> & { [key: string]: unknown };
+      };
+      receipts: {
+        Row: ReceiptRow;
+        Insert: Partial<ReceiptRow> & { account_id: string; uploaded_by: string; storage_path: string };
+        Update: Partial<ReceiptRow> & { [key: string]: unknown };
+      };
+      receipt_line_items: {
+        Row: ReceiptLineItemRow;
+        Insert: Partial<ReceiptLineItemRow> & { receipt_id: string; account_id: string; description: string };
+        Update: Partial<ReceiptLineItemRow> & { [key: string]: unknown };
       };
     };
     Views: Record<string, never>;
