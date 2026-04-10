@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Unit Tests — Scheduling Propose Route
  *
@@ -39,10 +38,12 @@ describe("Scheduling proposal logic", () => {
   });
 
   it("should skip weekends", () => {
-    const saturday = new Date("2026-04-04"); // Saturday
-    const sunday = new Date("2026-04-05"); // Sunday
-    expect(saturday.getDay()).toBe(6);
-    expect(sunday.getDay()).toBe(0);
+    // Use ISO string format (UTC) to avoid timezone issues
+    // April 4, 2026 is a Saturday, April 5 is a Sunday in UTC
+    const saturday = new Date("2026-04-04T00:00:00Z"); // Saturday in UTC
+    const sunday = new Date("2026-04-05T00:00:00Z"); // Sunday in UTC
+    expect(saturday.getUTCDay()).toBe(6);
+    expect(sunday.getUTCDay()).toBe(0);
   });
 
   it("should prefer higher efficiency techs", () => {

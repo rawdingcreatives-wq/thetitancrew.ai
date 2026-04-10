@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · POST /api/inventory
  * Add a new inventory item.
@@ -6,6 +5,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("inventory");
 
 export async function POST(req: NextRequest) {
   try {
@@ -44,8 +46,8 @@ export async function POST(req: NextRequest) {
 
     if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
-    const { data: item, error: itemErr } = await service
-      .from("inventory_items")
+    const { data: item, error: itemErr } = await (service as any)
+      .from("parts")
       .insert({
         account_id: body.accountId,
         name: body.name.trim(),
@@ -59,13 +61,13 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (itemErr) {
-      console.error("[Inventory API] Insert error:", itemErr);
+      log.error({ event: "insert_error", err: String(itemErr) }, "Insert error");
       return NextResponse.json({ error: itemErr.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, item });
   } catch (err) {
-    console.error("[Inventory API] Unhandled:", err);
+    log.error({ event: "unhandled_error", err: String(err) }, "Unhandled error");
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

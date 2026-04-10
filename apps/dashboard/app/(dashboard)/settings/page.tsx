@@ -1,18 +1,33 @@
-// @ts-nocheck
 /**
- * TitanCrew Â· Settings Page
+ * TitanCrew · Settings Page
  * Account info, integrations status, plan & billing, notifications.
  */
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import {
-  Settings, Building2, Phone, Mail, Calendar, CreditCard,
-  CheckCircle2, XCircle, ExternalLink, Shield, Bell, Zap,
+  Settings, Phone, Calendar, CreditCard,
+  CheckCircle2, Shield, Bell, Zap,
   ArrowUpRight, Lock
 } from "lucide-react";
 import ManageBillingButton from "@/components/billing/ManageBillingButton";
-import ProfileEditForm from "@/components/settings/ProfileEditForm";
+import EditableBusinessProfile from "@/components/settings/EditableBusinessProfile";
+
+interface Account {
+  id: string;
+  business_name: string;
+  owner_name: string;
+  phone: string;
+  trade_type: string;
+  plan: string;
+  google_calendar_token: string | null;
+  qbo_access_token: string | null;
+  meta_access_token: string | null;
+  twilio_phone_number: string | null;
+  crew_deployed_at: string | null;
+  onboard_step: number;
+  created_at: string;
+}
 
 // âââ Trade label map ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 const TRADE_LABELS: Record<string, string> = {
@@ -31,23 +46,23 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select(`
       id, business_name, owner_name, phone, trade_type, plan,
       google_calendar_token, qbo_access_token, meta_access_token,
       twilio_phone_number, crew_deployed_at, onboard_step,
-      meta_page_name, created_at
+      created_at
     `)
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
   if (!account) redirect("/login");
 
-  const planConfig: Record<string, { label: string; price: string; color: string; isBasic: boolean }> = {
-    pro:   { label: "Pro",   price: "$799/mo",  color: "text-[#FF6B00] bg-orange-50 border-orange-200",  isBasic: false },
-    basic: { label: "Basic", price: "$399/mo",  color: "text-blue-700 bg-blue-50 border-blue-200",       isBasic: true  },
+  const planConfig: Record<string, { label: string; price: string; color: string; isLite: boolean }> = {
+    lite:   { label: "Lite",   price: "Free",     color: "text-slate-600 bg-slate-50 border-slate-200",     isLite: true  },
+    growth: { label: "Growth", price: "$399/mo",  color: "text-blue-700 bg-blue-50 border-blue-200",        isLite: false },
+    scale:  { label: "Scale",  price: "$799/mo",  color: "text-[#FF6B00] bg-orange-50 border-orange-200",   isLite: false },
   };
-  const plan = planConfig[account.plan as string] ?? planConfig.basic;
+  const plan = planConfig[account.plan as string] ?? planConfig.lite;
 
   const tradeLabel = TRADE_LABELS[account.trade_type as string] ?? (account.trade_type ?? "â");
 
@@ -105,7 +120,19 @@ export default async function SettingsPage() {
         <p className="text-sm text-slate-500 mt-1">Account, integrations, and preferences</p>
       </div>
 
-      <ProfileEditForm account={account} userEmail={user.email ?? ''} />
+      {/* Business profile — inline editable */}
+      <EditableBusinessProfile
+        account={{
+          id: account.id,
+          business_name: account.business_name,
+          owner_name: account.owner_name,
+          phone: account.phone,
+          trade_type: account.trade_type,
+          created_at: account.created_at,
+        }}
+        email={user.email || ""}
+        _tradeLabel={tradeLabel}
+      />
 
       {/* Plan & Billing */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
@@ -127,7 +154,7 @@ export default async function SettingsPage() {
           </div>
 
           <div className="flex flex-col gap-2 flex-shrink-0">
-            {plan.isBasic && (
+            {plan.isLite && (
               <a
                 href="/pricing"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90"
@@ -142,7 +169,7 @@ export default async function SettingsPage() {
         </div>
 
         {/* Basic vs Pro feature comparison (shown for Basic users) */}
-        {plan.isBasic && (
+        {plan.isLite && (
           <div className="mt-5 rounded-xl border border-orange-100 bg-orange-50/50 p-4">
             <p className="text-xs font-bold text-[#FF6B00] uppercase tracking-wide mb-3">Pro unlocks:</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

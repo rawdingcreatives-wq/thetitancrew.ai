@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Morning Briefing Email API Route
  *
@@ -24,6 +23,34 @@ import {
 const AGENT_SECRET = process.env.AGENT_API_SECRET ?? "";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
+// ─── Types for Supabase responses ────────────────────────────
+
+interface AccountRow {
+  id: string;
+  email: string;
+  business_name: string;
+  owner_name: string;
+}
+
+interface JobRow {
+  id: string;
+  title: string;
+  scheduled_start: string;
+  scheduled_end: string;
+  status: string;
+  estimate_amount: number | null;
+  trade_type: string | null;
+  invoice_amount: number | null;
+}
+
+interface AgentRunRow {
+  id: string;
+  trigger_event: string;
+  output_summary: string | null;
+  created_at: string;
+  status: string;
+}
+
 export async function POST(req: NextRequest) {
   // ── Auth: agent secret or user session ──────────────────────
   const secret = req.headers.get("x-titancrew-secret");
@@ -42,13 +69,14 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Fetch account ───────────────────────────────────────────
-  const { data: account, error: accErr } = await supabase
+  const { data: account, error: accErr } = await (supabase as any)
     .from("accounts")
     .select("*")
     .eq("id", accountId)
     .single();
 
-  if (accErr || !account) {
+  const typedAccount = account as AccountRow | null;
+  if (accErr || !typedAccount) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
@@ -66,7 +94,7 @@ export async function POST(req: NextRequest) {
   const [jobsTodayRes, jobsWeekRes, invoicesRes, agentRunsRes, hilRes] =
     await Promise.all([
       // Jobs today
-      supabase
+      (supabase as any)
         .from("jobs")
         .select("id, title, scheduled_start, scheduled_end, status, estimate_amount, trade_type")
         .eq("account_id", accountId)
@@ -75,7 +103,7 @@ export async function POST(req: NextRequest) {
         .order("scheduled_start", { ascending: true }),
 
       // Jobs this week
-      supabase
+      (supabase as any)
         .from("jobs")
         .select("id, estimate_amount, status")
         .eq("account_id", accountId)
@@ -83,14 +111,14 @@ export async function POST(req: NextRequest) {
         .lte("scheduled_start", endOfDay.toISOString()),
 
       // Outstanding invoices
-      supabase
+      (supabase as any)
         .from("jobs")
         .select("id, invoice_amount")
         .eq("account_id", accountId)
         .eq("status", "invoiced"),
 
       // Agent runs last 24h
-      supabase
+      (supabase as any)
         .from("agent_runs")
         .select("id, trigger_event, output_summary, created_at, status")
         .eq("account_id", accountId)
@@ -100,7 +128,7 @@ export async function POST(req: NextRequest) {
         .limit(8),
 
       // Pending HIL approvals
-      supabase
+      (supabase as any)
         .from("hil_confirmations")
         .select("id")
         .eq("account_id", accountId)
@@ -108,8 +136,8 @@ export async function POST(req: NextRequest) {
     ]);
 
   // ── Build today's schedule (join with customers + techs) ────
-  const todayJobs = jobsTodayRes.data ?? [];
-  const todaySchedule = todayJobs.map((job: any) => ({
+  const todayJobs = (jobsTodayRes.data ?? []) as JobRow[];
+  const todaySchedule = todayJobs.map((job) => ({
     time: new Date(job.scheduled_start).toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
@@ -122,16 +150,16 @@ export async function POST(req: NextRequest) {
   }));
 
   // ── Calculate revenue this week ─────────────────────────────
-  const weekJobs = jobsWeekRes.data ?? [];
+  const weekJobs = (jobsWeekRes.data ?? []) as JobRow[];
   const revenueThisWeek = weekJobs.reduce(
-    (sum: number, j: any) => sum + (j.estimate_amount ?? 0),
+    (sum: number, j: JobRow) => sum + (j.estimate_amount ?? 0),
     0
   );
 
   // ── Outstanding invoices ────────────────────────────────────
-  const invoices = invoicesRes.data ?? [];
+  const invoices = (invoicesRes.data ?? []) as JobRow[];
   const outstandingAmount = invoices.reduce(
-    (sum: number, j: any) => sum + (j.invoice_amount ?? 0),
+    (sum: number, j: JobRow) => sum + (j.invoice_amount ?? 0),
     0
   );
 
@@ -147,8 +175,8 @@ export async function POST(req: NextRequest) {
     default: "🤖",
   };
 
-  const agentRuns = agentRunsRes.data ?? [];
-  const agentActions = agentRuns.map((run: any) => ({
+  const agentRuns = (agentRunsRes.data ?? []) as AgentRunRow[];
+  const agentActions = agentRuns.map((run) => ({
     icon: agentIcons[run.trigger_event] ?? agentIcons.default,
     agent: (run.trigger_event ?? "agent").replace(/_/g, " "),
     action: "completed",
@@ -181,11 +209,11 @@ export async function POST(req: NextRequest) {
 
   // ── Build & send ────────────────────────────────────────────
   const pendingApprovals = hilRes.data?.length ?? 0;
-  const firstName = account.owner_name?.split(" ")[0] ?? "Boss";
+  const firstName = typedAccount.owner_name?.split(" ")[0] ?? "Boss";
 
   const briefingData: MorningBriefingData = {
     ownerFirstName: firstName,
-    businessName: account.business_name,
+    businessName: typedAccount.business_name,
     date: today.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",
@@ -208,7 +236,7 @@ export async function POST(req: NextRequest) {
   const text = buildMorningBriefingText(briefingData);
 
   await sendEmail({
-    to: account.email,
+    to: typedAccount.email,
     subject: `☀️ ${firstName}'s Morning Briefing — ${briefingData.jobsToday} jobs today`,
     html,
     text,

@@ -17,6 +17,10 @@ ALTER TABLE accounts ADD COLUMN IF NOT EXISTS qbo_access_token TEXT;
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS qbo_realm_id TEXT;
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS qbo_refresh_token TEXT;
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS qbo_connected_at TIMESTAMPTZ;
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS qbo_token_expires_at TIMESTAMPTZ;
+
+-- Owner phone for HIL SMS verification (Finding 1 security fix)
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS owner_phone TEXT;
 
 -- Twilio phone (used in onboarding step 8)
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS twilio_phone_number TEXT;
@@ -24,6 +28,9 @@ ALTER TABLE accounts ADD COLUMN IF NOT EXISTS twilio_phone_number TEXT;
 -- Onboarding completion flag
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS address TEXT;
+
+-- Twilio A2P registration flag for SMS compliance
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS twilio_a2p_registered BOOLEAN DEFAULT FALSE;
 
 -- Verify columns were added
 SELECT column_name, data_type

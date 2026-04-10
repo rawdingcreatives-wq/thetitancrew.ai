@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_cron";
 -- ENUMS
 -- ============================================================
 
-CREATE TYPE plan_tier AS ENUM ('basic', 'pro', 'enterprise');
+CREATE TYPE plan_tier AS ENUM ('lite', 'growth', 'scale');
 CREATE TYPE subscription_status AS ENUM ('trialing', 'active', 'past_due', 'canceled', 'paused');
 CREATE TYPE agent_type AS ENUM (
   'scheduler', 'parts_inventory', 'customer_comm',
@@ -55,7 +55,7 @@ CREATE TABLE accounts (
   website_url         TEXT,
 
   -- Subscription
-  plan                plan_tier DEFAULT 'basic',
+  plan                plan_tier DEFAULT 'lite',
   subscription_status subscription_status DEFAULT 'trialing',
   stripe_customer_id  TEXT UNIQUE,
   stripe_sub_id       TEXT UNIQUE,
@@ -157,6 +157,7 @@ CREATE TABLE trade_customers (
 
 CREATE INDEX idx_trade_customers_account ON trade_customers(account_id);
 CREATE INDEX idx_trade_customers_phone ON trade_customers(phone);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_trade_customers_account_phone ON trade_customers(account_id, phone) WHERE phone IS NOT NULL;
 CREATE INDEX idx_trade_customers_embedding ON trade_customers USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
 -- ============================================================

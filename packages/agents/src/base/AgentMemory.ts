@@ -7,6 +7,9 @@
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Database } from "../../shared/types/database.types";
+import { createLogger } from "../guardrails/logger";
+
+const logger = createLogger("AgentMemory");
 
 export type MemoryType =
   | "customer_pref"
@@ -60,8 +63,8 @@ export class AgentMemory {
   ): Promise<string> {
     const embedding = await this.embed(content);
 
-    const { data, error } = await this.supabase
-      .from("agent_memory")
+    const { data, error } = await (this.supabase
+      .from("agent_memory") as any)
       .insert({
         account_id: this.accountId,
         memory_type: memoryType,
@@ -96,21 +99,21 @@ export class AgentMemory {
     const queryEmbedding = await this.embed(query);
 
     // Use the RPC function defined in the schema
-    const { data, error } = await this.supabase.rpc("search_agent_memory", {
+    const { data, error } = await (this.supabase.rpc as any)("search_agent_memory", {
       p_account_id: this.accountId,
-      p_query_embedding: queryEmbedding as never,
+      p_query_embedding: queryEmbedding,
       p_memory_type: memoryType ?? null,
       p_limit: limit,
     });
 
     if (error) {
-      console.error("[AgentMemory] Search failed:", error);
+      logger.error({ error }, "Search failed");
       return [];
     }
 
-    return (data ?? [])
-      .filter((m: { similarity: number }) => m.similarity >= minSimilarity)
-      .map((m: { id: string; content: string; metadata: Record<string, unknown>; similarity: number }) => ({
+    return ((data as any) ?? [])
+      .filter((m: any) => m.similarity >= minSimilarity)
+      .map((m: any) => ({
         id: m.id,
         memoryType: memoryType ?? "job_pattern",
         content: m.content,
@@ -142,12 +145,12 @@ export class AgentMemory {
    * Update relevance score (decay unused memories over time).
    */
   async updateRelevance(memoryId: string, score: number): Promise<void> {
-    await this.supabase
-      .from("agent_memory")
+    await (this.supabase
+      .from("agent_memory") as any)
       .update({
         relevance_score: score,
         last_accessed: new Date().toISOString(),
-        access_count: this.supabase.rpc("increment" as never, { id: memoryId }) as never,
+        access_count: 1,
       })
       .eq("id", memoryId);
   }
@@ -156,7 +159,7 @@ export class AgentMemory {
    * Delete a specific memory (e.g., if it becomes outdated).
    */
   async delete(memoryId: string): Promise<void> {
-    await this.supabase.from("agent_memory").delete().eq("id", memoryId);
+    await (this.supabase.from("agent_memory") as any).delete().eq("id", memoryId);
   }
 
   /**
@@ -187,7 +190,7 @@ export class AgentMemory {
     }
 
     // Dev fallback: deterministic pseudo-embedding (NOT for production)
-    console.warn("[AgentMemory] No OPENAI_API_KEY — using mock embeddings (dev only)");
+    logger.warn({}, "No OPENAI_API_KEY — using mock embeddings (dev only)");
     return this.mockEmbed(text);
   }
 

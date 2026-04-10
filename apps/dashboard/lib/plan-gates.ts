@@ -5,7 +5,7 @@
  * Import this anywhere you need to check a feature flag.
  */
 
-export type PlanKey = "basic" | "pro" | "elite";
+export type PlanKey = "lite" | "growth" | "scale";
 
 export interface PlanFeatures {
   /** Number of AI agents active */
@@ -29,8 +29,8 @@ export interface PlanFeatures {
 }
 
 export const PLAN_FEATURES: Record<PlanKey, PlanFeatures> = {
-  basic: {
-    agentCount:         5, // All 6 except TechDispatch
+  lite: {
+    agentCount:         5, // Most restricted (free tier)
     techDispatch:       false,
     multiLocation:      false,
     priorityOnboarding: false,
@@ -40,8 +40,8 @@ export const PLAN_FEATURES: Record<PlanKey, PlanFeatures> = {
     whiteLabel:         false,
     accountManager:     false,
   },
-  pro: {
-    agentCount:         6, // Full crew including TechDispatch
+  growth: {
+    agentCount:         6, // All features (mid-tier)
     techDispatch:       true,
     multiLocation:      true,
     priorityOnboarding: true,
@@ -51,8 +51,8 @@ export const PLAN_FEATURES: Record<PlanKey, PlanFeatures> = {
     whiteLabel:         false,
     accountManager:     false,
   },
-  elite: {
-    agentCount:         6,
+  scale: {
+    agentCount:         6, // Full access with priority (scale)
     techDispatch:       true,
     multiLocation:      true,
     priorityOnboarding: true,
@@ -65,19 +65,20 @@ export const PLAN_FEATURES: Record<PlanKey, PlanFeatures> = {
 };
 
 export const PLAN_PRICES: Record<PlanKey, { monthly: number; label: string }> = {
-  basic: { monthly: 399, label: "$399/mo" },
-  pro:   { monthly: 799, label: "$799/mo" },
-  elite: { monthly: 1299, label: "$1,299/mo" },
+  lite:   { monthly: 0, label: "Free" },
+  growth: { monthly: 399, label: "$399/mo" },
+  scale:  { monthly: 799, label: "$799/mo" },
 };
 
 /** Returns true if the given plan includes the feature */
 export function hasFeature(plan: string | null | undefined, feature: keyof PlanFeatures): boolean {
-  const key = (plan ?? "basic") as PlanKey;
-  return PLAN_FEATURES[key]?.[feature] ?? PLAN_FEATURES.basic[feature];
+  const key = (plan ?? "lite") as PlanKey;
+  const features = PLAN_FEATURES[key] ?? PLAN_FEATURES.lite;
+  return Boolean(features[feature]);
 }
 
 /** Returns the plan features object for a given plan key */
 export function getPlanFeatures(plan: string | null | undefined): PlanFeatures {
-  const key = (plan ?? "basic") as PlanKey;
-  return PLAN_FEATURES[key] ?? PLAN_FEATURES.basic;
+  const key = (plan ?? "lite") as PlanKey;
+  return PLAN_FEATURES[key] ?? PLAN_FEATURES.lite;
 }

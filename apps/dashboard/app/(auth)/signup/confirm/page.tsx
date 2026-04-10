@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 /**
@@ -10,7 +9,7 @@
 
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Zap, Mail, ArrowRight, RefreshCw } from "lucide-react";
+import { Zap, Mail, RefreshCw } from "lucide-react";
 import { useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
 

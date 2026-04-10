@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Schedule Page
  * Upcoming and recent jobs in a calendar-style timeline view.
@@ -6,40 +5,75 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Calendar, Clock, MapPin, User, CheckCircle2, AlertCircle, Zap } from "lucide-react";
+import { Calendar, MapPin, User, CheckCircle2, Zap } from "lucide-react";
+
+interface Account {
+  id: string;
+  business_name: string;
+  google_calendar_token: string | null;
+}
+
+interface Customer {
+  name: string;
+}
+
+interface Technician {
+  name: string;
+}
+
+interface UpcomingJob {
+  id: string;
+  address: string;
+  job_type: string;
+  status: string;
+  scheduled_start: string;
+  scheduled_end: string | null;
+  booked_by_ai: boolean;
+  customer_id: string;
+  technician_id: string;
+  trade_customers: Customer;
+  technicians: Technician;
+}
+
+interface RecentJob {
+  id: string;
+  address: string;
+  job_type: string;
+  status: string;
+  scheduled_start: string;
+  actual_end: string;
+  booked_by_ai: boolean;
+  customer_id: string;
+  trade_customers: Customer;
+}
 
 export default async function SchedulePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select("id, business_name, google_calendar_token")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
   if (!account) redirect("/login");
 
-  const now = new Date();
-  const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: upcomingJobs } = await supabase
-    .from("jobs")
-    .select("id, customer_name, address, job_type, status, scheduled_start, scheduled_end, booked_by_ai, technician_name")
+  const { data: upcomingJobs } = await supabase.from("jobs")
+    .select("id, address, job_type, status, scheduled_start, scheduled_end, booked_by_ai, customer_id, technician_id, trade_customers(name), technicians(name)")
     .eq("account_id", account.id)
     .in("status", ["scheduled", "dispatched", "in_progress"])
     .order("scheduled_start", { ascending: true })
-    .limit(50);
+    .limit(50) as { data: UpcomingJob[] | null };
 
-  const { data: recentJobs } = await supabase
-    .from("jobs")
-    .select("id, customer_name, address, job_type, status, scheduled_start, actual_end, booked_by_ai")
+  const { data: recentJobs } = await supabase.from("jobs")
+    .select("id, address, job_type, status, scheduled_start, actual_end, booked_by_ai, customer_id, trade_customers(name)")
     .eq("account_id", account.id)
     .in("status", ["completed", "invoiced"])
     .gte("actual_end", sevenDaysAgo)
     .order("actual_end", { ascending: false })
-    .limit(10);
+    .limit(10) as { data: RecentJob[] | null };
 
   function formatDate(iso: string | null) {
     if (!iso) return "Unscheduled";
@@ -66,7 +100,7 @@ export default async function SchedulePage() {
   };
 
   // Group upcoming by date label
-  const grouped: Record<string, typeof upcomingJobs> = {};
+  const grouped: Record<string, UpcomingJob[]> = {};
   for (const job of upcomingJobs ?? []) {
     const key = formatDate(job.scheduled_start);
     if (!grouped[key]) grouped[key] = [];
@@ -119,8 +153,8 @@ export default async function SchedulePage() {
                 <span className="text-xs text-slate-400">{dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""}</span>
               </div>
               <div className="space-y-2">
-                {dayJobs.map((job) => {
-                  const sc = statusConfig[job.status] ?? statusConfig.scheduled;
+                {dayJobs.map((job: UpcomingJob) => {
+                  const sc = statusConfig[job.status as keyof typeof statusConfig] ?? statusConfig.scheduled;
                   return (
                     <div key={job.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow flex items-start gap-4">
                       <div className="flex flex-col items-center gap-1 pt-0.5 min-w-[56px]">
@@ -132,7 +166,7 @@ export default async function SchedulePage() {
                       <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${sc.dot}`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-[#1A2744]">{job.customer_name || "Unknown"}</span>
+                          <span className="text-sm font-semibold text-[#1A2744]">{job.trade_customers?.name || "Unknown"}</span>
                           {job.job_type && (
                             <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{job.job_type}</span>
                           )}
@@ -148,10 +182,10 @@ export default async function SchedulePage() {
                             {job.address}
                           </p>
                         )}
-                        {job.technician_name && (
+                        {job.technicians?.name && (
                           <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
                             <User className="w-3 h-3 flex-shrink-0" />
-                            {job.technician_name}
+                            {job.technicians.name}
                           </p>
                         )}
                       </div>
@@ -172,10 +206,10 @@ export default async function SchedulePage() {
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Completed This Week</h2>
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-50">
-            {recentJobs.map((job) => (
+            {(recentJobs ?? []).map((job: RecentJob) => (
               <div key={job.id} className="flex items-center gap-3 px-4 py-3">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                <span className="text-sm font-medium text-[#1A2744] flex-1">{job.customer_name || "Unknown"}</span>
+                <span className="text-sm font-medium text-[#1A2744] flex-1">{job.trade_customers?.name || "Unknown"}</span>
                 {job.job_type && <span className="text-xs text-slate-400 hidden sm:block">{job.job_type}</span>}
                 {job.booked_by_ai && (
                   <span className="text-xs bg-orange-50 text-[#FF6B00] font-semibold px-2 py-0.5 rounded-full">AI</span>

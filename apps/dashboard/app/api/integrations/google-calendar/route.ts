@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew — Google Calendar OAuth Route
  *
@@ -15,6 +14,20 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("gcal-oauth");
+
+interface GoogleTokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+}
+
+interface Account {
+  id: string;
+  google_calendar_token?: string;
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const REDIRECT_URI = `${APP_URL}/api/integrations/google-calendar?action=callback`;
@@ -37,11 +50,7 @@ function buildGoogleAuthUrl(state: string): string {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
-async function exchangeCodeForTokens(code: string): Promise<{
-  access_token: string;
-  refresh_token?: string;
-  expires_in: number;
-} | null> {
+async function exchangeCodeForTokens(code: string): Promise<GoogleTokenResponse | null> {
   try {
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -73,11 +82,11 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.redirect(new URL("/login", req.url));
 
-    const { data: account } = await supabase
+    const { data: account } = await (supabase as any)
       .from("accounts")
       .select("id")
       .eq("owner_user_id", user.id)
-      .single();
+      .single() as { data: Account | null };
 
     if (!account) return NextResponse.redirect(new URL("/onboarding", req.url));
 
@@ -124,7 +133,7 @@ export async function GET(req: NextRequest) {
 
       // Save tokens into accounts table
       const supabase = await createServerClient();
-      await supabase.from("accounts").update({
+      await (supabase as any).from("accounts").update({
         google_calendar_token:    tokens.access_token,
         google_refresh_token:     tokens.refresh_token ?? null,
         google_connected_at:      new Date().toISOString(),
@@ -133,7 +142,7 @@ export async function GET(req: NextRequest) {
       // Return user to wherever they came from
       return NextResponse.redirect(new URL(`${returnTo}?calendar=connected`, req.url));
     } catch (err) {
-      console.error("[Google Calendar OAuth callback]", err);
+      log.error({ event: "oauth_callback_error", err: String(err) }, "OAuth callback error");
       return NextResponse.redirect(new URL(`${returnTo}?calendar=error&msg=unexpected`, req.url));
     }
   }
@@ -143,16 +152,16 @@ export async function GET(req: NextRequest) {
 
 // ─── POST handler — disconnect ────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: account } = await supabase
+  const { data: account } = await (supabase as any)
     .from("accounts")
     .select("id, google_calendar_token")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
 
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
@@ -160,11 +169,11 @@ export async function POST(req: NextRequest) {
   if (account.google_calendar_token) {
     await fetch(`https://oauth2.googleapis.com/revoke?token=${account.google_calendar_token}`, {
       method: "POST",
-    }).catch((err) => console.error("[Google Calendar] Token revocation failed:", err));
+    }).catch((_err) => log.error({ event: "token_revocation_failed", err: String(_err) }, "Token revocation failed"));
   }
 
   // Clear all Google fields
-  await supabase.from("accounts").update({
+  await (supabase as any).from("accounts").update({
     google_calendar_token:              null,
     google_refresh_token:               null,
     google_calendar_id:                 null,

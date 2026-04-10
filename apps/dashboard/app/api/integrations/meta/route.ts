@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Meta Business Suite OAuth
  *
@@ -18,6 +17,21 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("meta-oauth");
+
+interface FacebookPage {
+  id: string;
+  name: string;
+  access_token: string;
+  category?: string;
+  picture?: object;
+}
+
+interface AccountData {
+  meta_access_token?: string;
+}
 
 const APP_ID     = process.env.FACEBOOK_APP_ID ?? "";
 const APP_SECRET = process.env.FACEBOOK_APP_SECRET ?? "";
@@ -89,10 +103,11 @@ export async function GET(req: NextRequest) {
     const tokenRes = await fetch(tokenUrl);
     if (!tokenRes.ok) {
       const err = await tokenRes.text();
-      console.error("[Meta OAuth] token exchange failed:", err);
+      log.error({ event: "token_exchange_failed", err }, "Token exchange failed");
       return NextResponse.redirect(`${APP_URL}/onboarding?meta=error&reason=token_exchange`);
     }
-    const { access_token: shortToken } = await tokenRes.json() as { access_token: string };
+    const tokenJson = await tokenRes.json() as { access_token: string };
+    const shortToken = tokenJson.access_token;
 
     // 2. Upgrade to long-lived token (~60 days)
     const longUrl = `https://graph.facebook.com/v19.0/oauth/access_token?` +
@@ -111,15 +126,15 @@ export async function GET(req: NextRequest) {
       `fields=id,name,access_token,category,picture` +
       `&access_token=${longToken}`
     );
-    const pagesJson = await pagesRes.json() as { data?: any[] };
-    const pages: any[] = pagesJson.data ?? [];
+    const pagesJson = await pagesRes.json() as { data?: FacebookPage[] };
+    const pages: FacebookPage[] = pagesJson.data ?? [];
 
     // Use the first page as the default (changeable in Settings)
     const primary = pages[0] ?? null;
 
     // 4. Persist to Supabase (service role bypasses RLS)
     const supabase = await createServiceClient();
-    const { error: dbErr } = await supabase
+    const { error: dbErr } = await (supabase as any)
       .from("accounts")
       .update({
         meta_access_token:      longToken,
@@ -131,14 +146,14 @@ export async function GET(req: NextRequest) {
       .eq("id", accountId);
 
     if (dbErr) {
-      console.error("[Meta OAuth] Supabase update error:", dbErr);
+      log.error({ event: "supabase_update_error", err: String(dbErr) }, "Supabase update error");
       // Still redirect with success — token was obtained; user can retry storage
     }
 
     return NextResponse.redirect(`${APP_URL}/onboarding?meta=connected`);
 
   } catch (err) {
-    console.error("[Meta OAuth] unexpected error:", err);
+    log.error({ event: "unexpected_error", err: String(err) }, "Unexpected error");
     return NextResponse.redirect(`${APP_URL}/onboarding?meta=error&reason=server_error`);
   }
 }
@@ -153,11 +168,11 @@ export async function POST(req: NextRequest) {
     const supabase = await createServiceClient();
 
     // Fetch current token to revoke it
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("accounts")
       .select("meta_access_token")
       .eq("id", accountId)
-      .single();
+      .single() as { data: AccountData | null };
 
     if (data?.meta_access_token) {
       await fetch(
@@ -167,7 +182,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Clear Meta fields
-    await supabase
+    await (supabase as any)
       .from("accounts")
       .update({
         meta_access_token:      null,
@@ -180,7 +195,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("[Meta disconnect] error:", err);
+    log.error({ event: "disconnect_error", err: String(err) }, "Disconnect error");
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

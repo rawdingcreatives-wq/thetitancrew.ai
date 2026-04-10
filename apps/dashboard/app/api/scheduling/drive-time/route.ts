@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Google Maps Drive Time API Route
  *
@@ -29,6 +28,22 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("drive-time");
+
+/** Google Maps Distance Matrix row element */
+interface DistanceMatrixElement {
+  distance?: { text: string; value: number };
+  duration?: { text: string; value: number };
+  duration_in_traffic?: { text: string; value: number };
+  status: string;
+}
+
+/** Google Maps Distance Matrix row */
+interface DistanceMatrixRow {
+  elements: DistanceMatrixElement[];
+}
 import { createServerClient } from "@/lib/supabase/server";
 
 const GOOGLE_MAPS_KEY = process.env.GOOGLE_MAPS_API_KEY ?? "";
@@ -109,9 +124,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Enrich with TitanCrew-specific fields ───────────────────
-    const enrichedRows = data.rows.map((row: any, rowIdx: number) => ({
+    const enrichedRows = data.rows.map((row: DistanceMatrixRow, rowIdx: number) => ({
       origin: data.origin_addresses[rowIdx],
-      elements: row.elements.map((el: any, elIdx: number) => ({
+      elements: row.elements.map((el: DistanceMatrixElement, elIdx: number) => ({
         destination: data.destination_addresses[elIdx],
         distance: el.distance,
         duration: el.duration,
@@ -143,7 +158,7 @@ export async function POST(req: NextRequest) {
       destinationAddresses: data.destination_addresses,
     });
   } catch (err) {
-    console.error("[Drive Time API]", err);
+    log.error({ event: "drive_time_error", err: String(err) }, "Failed to calculate drive times");
     return NextResponse.json(
       { error: "Failed to calculate drive times" },
       { status: 500 }

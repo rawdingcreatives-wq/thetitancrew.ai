@@ -72,8 +72,7 @@ NEVER:
       },
       riskLevel: "low",
       handler: async (input) => {
-        const { data } = await this.supabase
-          .from("parts")
+        const { data } = await (this.supabase.from("parts") as any)
           .select("id, sku, name, supplier, supplier_sku, unit_cost, qty_on_hand, qty_min_stock, qty_on_order, usage_30d, auto_reorder")
           .eq("account_id", this.config.accountId)
           .eq("auto_reorder", true)
@@ -84,7 +83,7 @@ NEVER:
         // Optionally factor in on-order qty
         if (input.include_pending_orders) {
           return data.filter(
-            (p) => (p.qty_on_hand + p.qty_on_order) <= p.qty_min_stock
+            (p: any) => (p.qty_on_hand + p.qty_on_order) <= p.qty_min_stock
           );
         }
 
@@ -152,8 +151,7 @@ NEVER:
         const total = lineItems.reduce((s, i) => s + i.quantity * i.unit_price, 0);
 
         // Save PO record as pending
-        const { data: poRecord } = await this.supabase
-          .from("purchase_orders")
+        const { data: poRecord } = await (this.supabase.from("purchase_orders") as any)
           .insert({
             account_id: this.config.accountId,
             supplier: input.supplier as string,
@@ -178,8 +176,7 @@ NEVER:
 
         if (orderResult.success) {
           // Update PO + part quantities
-          await this.supabase
-            .from("purchase_orders")
+          await (this.supabase.from("purchase_orders") as any)
             .update({
               status: "submitted",
               submitted_at: new Date().toISOString(),
@@ -190,16 +187,14 @@ NEVER:
 
           // Mark parts as on-order
           for (const item of lineItems) {
-            const { data: part } = await this.supabase
-              .from("parts")
+            const { data: part } = await (this.supabase.from("parts") as any)
               .select("qty_on_order, sku")
               .eq("account_id", this.config.accountId)
               .eq("sku", item.sku)
               .single();
 
             if (part) {
-              await this.supabase
-                .from("parts")
+              await (this.supabase.from("parts") as any)
                 .update({
                   qty_on_order: (part.qty_on_order ?? 0) + item.quantity,
                   last_ordered_at: new Date().toISOString(),
@@ -238,8 +233,7 @@ NEVER:
         const daysAhead = (input.days_ahead as number) ?? 3;
         const cutoff = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString();
 
-        const { data } = await this.supabase
-          .from("jobs")
+        const { data } = await (this.supabase.from("jobs") as any)
           .select("id, title, scheduled_start, parts_needed, job_type")
           .eq("account_id", this.config.accountId)
           .in("status", ["scheduled", "dispatched"])
@@ -276,16 +270,14 @@ NEVER:
         const updates: string[] = [];
 
         for (const item of items) {
-          const { data: part } = await this.supabase
-            .from("parts")
+          const { data: part } = await (this.supabase.from("parts") as any)
             .select("qty_on_hand, qty_on_order")
             .eq("account_id", this.config.accountId)
             .eq("sku", item.sku)
             .single();
 
           if (part) {
-            await this.supabase
-              .from("parts")
+            await (this.supabase.from("parts") as any)
               .update({
                 qty_on_hand: (part.qty_on_hand ?? 0) + item.quantity_received,
                 qty_on_order: Math.max(0, (part.qty_on_order ?? 0) - item.quantity_received),
@@ -296,8 +288,7 @@ NEVER:
           }
         }
 
-        await this.supabase
-          .from("purchase_orders")
+        await (this.supabase.from("purchase_orders") as any)
           .update({
             status: "received",
             received_at: new Date().toISOString(),
@@ -319,22 +310,21 @@ NEVER:
       },
       riskLevel: "low",
       handler: async (input) => {
-        const { data } = await this.supabase
-          .from("parts")
+        const { data } = await (this.supabase.from("parts") as any)
           .select("sku, name, usage_30d, unit_cost, qty_on_hand, last_used_at")
           .eq("account_id", this.config.accountId)
           .order("usage_30d", { ascending: false })
           .limit(50);
 
         const totalSpend = (data ?? []).reduce(
-          (s, p) => s + (p.usage_30d ?? 0) * (p.unit_cost ?? 0),
+          (s: any, p: any) => s + (p.usage_30d ?? 0) * (p.unit_cost ?? 0),
           0
         );
 
         return {
           parts: data ?? [],
           totalSpend30d: totalSpend,
-          slowMoving: (data ?? []).filter((p) => (p.usage_30d ?? 0) === 0),
+          slowMoving: (data ?? []).filter((p: any) => (p.usage_30d ?? 0) === 0),
         };
       },
     });
@@ -366,8 +356,7 @@ ${ctx.payload ? `Additional context: ${JSON.stringify(ctx.payload)}` : ""}
   }
 
   private async getIntegrations(): Promise<Record<string, unknown>> {
-    const { data } = await this.supabase
-      .from("accounts")
+    const { data } = await (this.supabase.from("accounts") as any)
       .select("integrations")
       .eq("id", this.config.accountId)
       .single();

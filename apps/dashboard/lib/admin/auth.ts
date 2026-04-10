@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Admin Auth Utilities
  *
@@ -7,6 +6,9 @@
  */
 
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("admin-auth");
 
 export type AdminRole = "super_admin" | "admin" | "support" | "viewer";
 
@@ -134,6 +136,6 @@ export async function logAdminAction(
       details: details ?? {},
     });
   } catch (err) {
-    console.error("[AdminLog] Failed to log action:", err);
+    log.error({ event: "log_action_failed", err: String(err) }, "Failed to log action");
   }
 }

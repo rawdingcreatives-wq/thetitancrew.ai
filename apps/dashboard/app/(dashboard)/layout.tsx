@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Dashboard Layout
  * Sidebar navigation + top header. Wraps all authenticated dashboard pages.
@@ -21,12 +20,10 @@ import {
   Users,
   Settings,
   Menu,
-  X,
   Zap,
   Bell,
   ChevronRight,
   LogOut,
-  User,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
@@ -51,16 +48,16 @@ const bottomNavItems = [
 // ─── Component ────────────────────────────────────────────
 
 const PLAN_LABELS: Record<string, { name: string; price: string }> = {
-  basic: { name: "Basic",    price: "$399/mo" },
-  pro:   { name: "Pro",      price: "$799/mo" },
-  elite: { name: "Elite",    price: "$1,299/mo" },
+  lite:   { name: "Lite",    price: "$399/mo" },
+  growth: { name: "Growth",  price: "$799/mo" },
+  scale:  { name: "Scale",   price: "$1,299/mo" },
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [planKey, setPlanKey] = useState<string>("basic");
+  const [planKey, setPlanKey] = useState<string>("lite");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [userInitials, setUserInitials] = useState("TC");
@@ -77,11 +74,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setUserEmail(email);
         const initials = email.split("@")[0].slice(0, 2).toUpperCase();
         setUserInitials(initials || "TC");
-        const { data } = await supabase
-          .from("accounts")
+        const { data } = await supabase.from("accounts")
           .select("plan")
           .eq("owner_user_id", user.id)
-          .single();
+          .single() as { data: { plan: string } | null };
         if (data?.plan) setPlanKey(data.plan);
       } catch (err) { console.error("[DashboardLayout] Failed to fetch plan:", err); }
     }

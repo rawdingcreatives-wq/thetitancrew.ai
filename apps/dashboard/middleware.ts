@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Next.js Middleware
  *
@@ -11,6 +10,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { CookieOptions } from "@supabase/ssr/dist/module/types";
 
 // ─── Route definitions ──────────────────────────────────────
 const PUBLIC_ROUTES = [
@@ -61,8 +61,8 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });

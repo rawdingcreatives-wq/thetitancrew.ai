@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · 404 Not Found
  *
@@ -6,7 +5,7 @@
  */
 
 import Link from "next/link";
-import { Home, Search, ArrowLeft } from "lucide-react";
+import { Home, ArrowLeft } from "lucide-react";
 
 export default function NotFound() {
   return (

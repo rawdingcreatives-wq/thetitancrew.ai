@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · RevenueChart
  * Weekly revenue bar chart with AI vs manual breakdown.

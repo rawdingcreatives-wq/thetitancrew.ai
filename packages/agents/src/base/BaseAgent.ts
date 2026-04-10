@@ -401,8 +401,7 @@ export abstract class BaseAgent {
   }
 
   protected async fetchAccountSnapshot(): Promise<AccountSnapshot | null> {
-    const { data } = await this.supabase
-      .from("accounts")
+    const { data } = await (this.supabase.from("accounts") as any)
       .select(
         "id, business_name, trade_type, timezone, plan, integrations, notification_prefs, tech_count, avg_job_value"
       )
@@ -418,8 +417,7 @@ export abstract class BaseAgent {
     status: "idle" | "running" | "waiting_human" | "error",
     lastError?: string
   ): Promise<void> {
-    await this.supabase
-      .from("agent_instances")
+    await (this.supabase.from("agent_instances") as any)
       .update({
         status,
         last_run_at: new Date().toISOString(),
@@ -434,7 +432,7 @@ export abstract class BaseAgent {
     durationMs: number,
     errorMessage: string | null
   ): Promise<void> {
-    await this.supabase.from("agent_runs").insert({
+    await (this.supabase.from("agent_runs") as any).insert({
       id: ctx.runId,
       agent_id: this.config.agentInstanceId,
       account_id: this.config.accountId,
@@ -448,7 +446,7 @@ export abstract class BaseAgent {
       output_tokens: this.runOutputTokens,
       cost_usd: this.estimateCost(),
       model_used: this.config.model,
-      actions_taken: this.runActions as unknown as never,
+      actions_taken: this.runActions as any,
       output_summary: outputSummary,
       error_message: errorMessage,
     });

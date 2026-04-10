@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew Dashboard — /compliance
  *
@@ -17,7 +16,20 @@ import { TCPAConsentTable } from "@/components/compliance/TCPAConsentTable";
 import { LegalDocumentPanel } from "@/components/compliance/LegalDocumentPanel";
 import { HILComplianceStats } from "@/components/compliance/HILComplianceStats";
 import { DataRightsPanel } from "@/components/compliance/DataRightsPanel";
-import { Shield, FileText, MessageSquare, Database, UserCheck } from "lucide-react";
+import { Shield, MessageSquare, Database, UserCheck } from "lucide-react";
+
+interface Account {
+  id: string;
+  business_name: string;
+  plan: string;
+  created_at: string;
+  twilio_a2p_registered: boolean;
+  twilio_phone_number: string;
+}
+
+interface HILStatus {
+  status: string;
+}
 
 export const metadata = { title: "Compliance Center — TitanCrew" };
 
@@ -26,11 +38,10 @@ export default async function CompliancePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select("id, business_name, plan, created_at, twilio_a2p_registered, twilio_phone_number")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
 
   if (!account) redirect("/onboarding");
 
@@ -38,22 +49,25 @@ export default async function CompliancePage() {
 
   // Parallel data fetch
   const [
-    { data: totalCustomers },
-    { data: optedOutCustomers },
-    { data: smsConsentCustomers },
-    { data: hilStats },
-    { data: recentComms },
+    totalCustomersRes,
+    optedOutCustomersRes,
+    smsConsentCustomersRes,
+    hilStatsRes,
   ] = await Promise.all([
     supabase.from("trade_customers").select("id", { count: "exact" }).eq("account_id", account.id),
     supabase.from("trade_customers").select("id", { count: "exact" }).eq("account_id", account.id).eq("comms_opt_out", true),
     supabase.from("trade_customers").select("id", { count: "exact" }).eq("account_id", account.id).eq("sms_opt_in", true),
     supabase.from("hil_confirmations").select("status").eq("account_id", account.id).gte("created_at", thirtyDaysAgo),
-    supabase.from("comms_log").select("id", { count: "exact" }).eq("account_id", account.id).eq("channel", "sms").gte("created_at", thirtyDaysAgo),
   ]);
 
-  const hilApproved = hilStats?.filter((h) => h.status === "approved").length ?? 0;
-  const hilRejected = hilStats?.filter((h) => h.status === "rejected").length ?? 0;
-  const hilExpired = hilStats?.filter((h) => h.status === "expired").length ?? 0;
+  const totalCustomers = totalCustomersRes.data;
+  const optedOutCustomers = optedOutCustomersRes.data;
+  const smsConsentCustomers = smsConsentCustomersRes.data;
+  const hilStats = hilStatsRes.data as HILStatus[] | null;
+
+  const hilApproved = hilStats?.filter((h: HILStatus) => h.status === "approved").length ?? 0;
+  const hilRejected = hilStats?.filter((h: HILStatus) => h.status === "rejected").length ?? 0;
+  const hilExpired = hilStats?.filter((h: HILStatus) => h.status === "expired").length ?? 0;
   const hilTotal = hilStats?.length ?? 0;
 
   const complianceScore = calculateComplianceScore({
@@ -88,7 +102,6 @@ export default async function CompliancePage() {
           label="TCPA Compliance"
           status={account.twilio_a2p_registered ? "compliant" : "action_needed"}
           detail={account.twilio_a2p_registered ? "A2P registered" : "Register A2P 10DLC"}
-          actionUrl="/integrations"
         />
         <ComplianceStatusCard
           icon={<UserCheck size={18} />}
@@ -112,47 +125,9 @@ export default async function CompliancePage() {
 
       {/* Legal Documents */}
       <LegalDocumentPanel
-        accountId={account.id}
+        _accountId={account.id}
         accountCreatedAt={account.created_at}
         plan={account.plan}
-        documents={[
-          {
-            id: "tos",
-            name: "Terms of Service",
-            version: "1.0",
-            effectiveDate: "March 28, 2026",
-            url: "/legal/terms-of-service",
-            accepted: true,
-            acceptedAt: account.created_at,
-          },
-          {
-            id: "dpa",
-            name: "Data Processing Agreement",
-            version: "1.0",
-            effectiveDate: "March 28, 2026",
-            url: "/legal/data-processing-agreement",
-            accepted: true,
-            acceptedAt: account.created_at,
-          },
-          {
-            id: "ai_disclaimer",
-            name: "AI Agent Liability Disclaimer",
-            version: "1.0",
-            effectiveDate: "March 28, 2026",
-            url: "/legal/ai-liability-disclaimer",
-            accepted: true,
-            acceptedAt: account.created_at,
-          },
-          {
-            id: "sms_policy",
-            name: "SMS & TCPA Communications Policy",
-            version: "1.0",
-            effectiveDate: "March 28, 2026",
-            url: "/legal/sms-policy",
-            accepted: true,
-            acceptedAt: account.created_at,
-          },
-        ]}
       />
 
       {/* HIL Compliance Stats */}
@@ -160,8 +135,7 @@ export default async function CompliancePage() {
         total={hilTotal}
         approved={hilApproved}
         rejected={hilRejected}
-        expired={hilExpired}
-        period="Last 30 days"
+        pending={hilExpired}
       />
 
       {/* TCPA Consent Table */}
@@ -177,11 +151,11 @@ export default async function CompliancePage() {
             <span className="text-red-500">{optedOutCustomers?.length ?? 0} opted out</span>
           </div>
         </div>
-        <TCPAConsentTable accountId={account.id} />
+        <TCPAConsentTable _accountId={account.id} />
       </div>
 
       {/* Data Rights Panel */}
-      <DataRightsPanel accountId={account.id} businessName={account.business_name ?? ""} />
+      <DataRightsPanel _accountId={account.id} />
 
       {/* A2P Registration Status */}
       <div className="bg-[#FFF7ED] border border-orange-200 rounded-xl p-6">

@@ -1,9 +1,8 @@
-// @ts-nocheck
 "use client";
 import { useState } from "react";
 import { Database, Download, Trash2, Shield, Loader2 } from "lucide-react";
 
-export function DataRightsPanel({ accountId }: { accountId: string }) {
+export function DataRightsPanel({ _accountId }: { _accountId: string }) {
   const [loading, setLoading] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 

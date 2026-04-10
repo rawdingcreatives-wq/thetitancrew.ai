@@ -22,6 +22,9 @@ import { createClient } from "@supabase/supabase-js";
 import { AuditLogger } from "../../guardrails/AuditLogger";
 import { LiabilityFilter } from "../../guardrails/LiabilityFilter";
 import { HILGate } from "../../base/HILGate";
+import { createLogger } from "../../guardrails/logger";
+
+const logger = createLogger("GoogleCalendarAdapter");
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -92,7 +95,7 @@ async function getOAuthClient(accountId: string): Promise<{
   client: InstanceType<typeof google.auth.OAuth2>;
   calendarId: string;
 } | null> {
-  const { data: account } = await supabase
+  const { data: account } = await (supabase as any)
     .from("accounts")
     .select("google_calendar_token, google_calendar_id, google_refresh_token")
     .eq("id", accountId)
@@ -112,9 +115,9 @@ async function getOAuthClient(accountId: string): Promise<{
   });
 
   // Auto-refresh on expiry
-  oauth2Client.on("tokens", async (tokens) => {
+  oauth2Client.on("tokens", async (tokens: any) => {
     if (tokens.access_token) {
-      await supabase
+      await (supabase as any)
         .from("accounts")
         .update({
           google_calendar_token: tokens.access_token,
@@ -139,8 +142,11 @@ export class GoogleCalendarAdapter {
   private readonly RETRY_MAX = 3;
   private readonly RETRY_DELAY_MS = 1000;
 
+  private accountId: string;
+
   constructor(accountId: string) {
-    this.auditLogger = new AuditLogger(supabase, accountId);
+    this.accountId = accountId;
+    this.auditLogger = new AuditLogger(supabase);
     this.liabilityFilter = new LiabilityFilter();
     this.hilGate = new HILGate(supabase, accountId);
   }
@@ -167,7 +173,7 @@ export class GoogleCalendarAdapter {
         if (!isRetryable || attempt === maxAttempts) throw lastError;
 
         const delay = this.RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-        console.warn(`[CalendarAdapter] Retry ${attempt}/${maxAttempts} for ${context} in ${delay}ms`);
+        logger.warn({ attempt, maxAttempts, context, delayMs: delay }, "Retry");
         await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -205,14 +211,14 @@ export class GoogleCalendarAdapter {
       "freebusy query"
     );
 
-    const busySlots = freebusyResponse.data.calendars ?? {};
+    const busySlots = ((freebusyResponse as any).data.calendars as Record<string, any>) ?? {};
     const allBusyPeriods: Array<{ start: Date; end: Date }> = [];
 
     for (const calData of Object.values(busySlots)) {
-      for (const busy of calData.busy ?? []) {
+      for (const busy of (calData as any).busy ?? []) {
         allBusyPeriods.push({
-          start: new Date(busy.start!),
-          end: new Date(busy.end!),
+          start: new Date((busy as any).start!),
+          end: new Date((busy as any).end!),
         });
       }
     }
@@ -254,8 +260,10 @@ export class GoogleCalendarAdapter {
     }
 
     await this.auditLogger.log({
-      eventType: "calendar.availability_checked",
-      details: {
+      accountId: query.accountId,
+      action: "calendar.availability_checked",
+      entityType: "calendar",
+      metadata: {
         dateRange: `${query.startDate} → ${query.endDate}`,
         technicianCount: query.technicianEmails.length,
         slotsFound: slots.length,
@@ -271,7 +279,7 @@ export class GoogleCalendarAdapter {
    */
   async bookJob(event: JobEvent): Promise<{ eventId: string; htmlLink: string }> {
     // Liability check
-    const liabilityCheck = this.liabilityFilter.check({
+    const liabilityCheck = this.liabilityFilter.check("calendar_book_job", {
       action: "calendar_book_job",
       estimatedValue: event.estimatedValue,
       details: event,
@@ -281,10 +289,12 @@ export class GoogleCalendarAdapter {
     // HIL for high-value jobs
     if ((event.estimatedValue ?? 0) > 500) {
       const approved = await this.hilGate.requestConfirmation({
+        accountId: event.accountId,
         actionType: "calendar_book_job",
+        riskLevel: "medium",
         description: `Book job: "${event.title}" on ${new Date(event.startTime).toLocaleDateString()} — Est. $${event.estimatedValue?.toLocaleString()}`,
-        estimatedValue: event.estimatedValue,
-        metadata: { jobId: event.jobId, technicianEmail: event.technicianEmail },
+        amount: event.estimatedValue,
+        payload: { jobId: event.jobId, technicianEmail: event.technicianEmail },
       });
       if (!approved) throw new Error("HIL: Job booking rejected by owner");
     }
@@ -329,12 +339,12 @@ export class GoogleCalendarAdapter {
     };
 
     const result = await this.withRetry(
-      () => calendar.events.insert({ calendarId: auth.calendarId, requestBody: calEvent, sendUpdates: "all" }),
+      () => calendar.events.insert({ calendarId: auth.calendarId, requestBody: calEvent, sendUpdates: "all" } as any),
       "book job"
     );
 
-    const eventId = result.data.id!;
-    const htmlLink = result.data.htmlLink!;
+    const eventId = ((result as any).data as any).id!;
+    const htmlLink = ((result as any).data as any).htmlLink!;
 
     // Sync back to jobs table
     await supabase.from("jobs").update({
@@ -346,8 +356,11 @@ export class GoogleCalendarAdapter {
     }).eq("id", event.jobId).eq("account_id", event.accountId);
 
     await this.auditLogger.log({
-      eventType: "calendar.job_booked",
-      details: { jobId: event.jobId, eventId, startTime: event.startTime, estimatedValue: event.estimatedValue },
+      accountId: event.accountId,
+      action: "calendar.job_booked",
+      entityType: "job",
+      entityId: event.jobId,
+      metadata: { jobId: event.jobId, eventId, startTime: event.startTime, estimatedValue: event.estimatedValue },
     });
 
     return { eventId, htmlLink };
@@ -380,14 +393,17 @@ export class GoogleCalendarAdapter {
         calendarId: auth.calendarId,
         eventId,
         requestBody: patch,
-        sendUpdates: updates.startTime ? "all" : "none", // Only notify on reschedule
-      }),
+        sendUpdates: (updates.startTime ? "all" : "none") as any, // Only notify on reschedule
+      } as any),
       "update job"
     );
 
     await this.auditLogger.log({
-      eventType: "calendar.job_updated",
-      details: { eventId, updates },
+      accountId,
+      action: "calendar.job_updated",
+      entityType: "calendar_event",
+      entityId: eventId,
+      metadata: { eventId, updates },
     });
   }
 
@@ -397,9 +413,11 @@ export class GoogleCalendarAdapter {
   async cancelJob(accountId: string, eventId: string, reason?: string): Promise<void> {
     // Always requires HIL for cancellations
     const approved = await this.hilGate.requestConfirmation({
+      accountId,
       actionType: "calendar_cancel_job",
+      riskLevel: "medium",
       description: `Cancel calendar event ${eventId}${reason ? ` — Reason: ${reason}` : ""}`,
-      metadata: { eventId, reason },
+      payload: { eventId, reason },
     });
     if (!approved) throw new Error("HIL: Job cancellation rejected by owner");
 
@@ -418,8 +436,11 @@ export class GoogleCalendarAdapter {
     );
 
     await this.auditLogger.log({
-      eventType: "calendar.job_cancelled",
-      details: { eventId, reason },
+      accountId,
+      action: "calendar.job_cancelled",
+      entityType: "calendar_event",
+      entityId: eventId,
+      metadata: { eventId, reason },
     });
   }
 
@@ -486,8 +507,8 @@ export class GoogleCalendarAdapter {
     );
 
     // Filter to TitanCrew-managed events only
-    return (result.data.items ?? []).filter(
-      (e) => e.extendedProperties?.private?.titancrew_account_id === accountId
+    return (((result as any).data as any).items ?? []).filter(
+      (e: any) => e.extendedProperties?.private?.titancrew_account_id === accountId
     );
   }
 
@@ -516,8 +537,8 @@ export class GoogleCalendarAdapter {
     });
 
     const conflictingEvents: string[] = [];
-    for (const [calId, calData] of Object.entries(result.data.calendars ?? {})) {
-      if ((calData.busy?.length ?? 0) > 0) {
+    for (const [calId, calData] of Object.entries((result as any).data.calendars ?? {})) {
+      if (((calData as any).busy?.length ?? 0) > 0) {
         conflictingEvents.push(calId);
       }
     }

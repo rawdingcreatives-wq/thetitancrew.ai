@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Inventory Page
  * Parts and materials tracking with AI reorder alerts.
@@ -9,31 +8,44 @@ import { redirect } from "next/navigation";
 import { Package, AlertTriangle, CheckCircle2, TrendingDown, Zap } from "lucide-react";
 import { AddPartButton } from "@/components/inventory/AddPartButton";
 
+interface Account {
+  id: string;
+  business_name: string;
+}
+
+interface InventoryItem {
+  id: string;
+  account_id: string;
+  name: string;
+  sku: string;
+  quantity_on_hand: number;
+  reorder_point: number;
+  unit_cost: number;
+}
+
 export default async function InventoryPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select("id, business_name")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
   if (!account) redirect("/login");
 
   // Fetch inventory items if table exists
-  const { data: items, error } = await supabase
-    .from("inventory_items")
+  const { data: items, error } = await supabase.from("parts")
     .select("*")
     .eq("account_id", account.id)
-    .order("quantity_on_hand", { ascending: true });
+    .order("quantity_on_hand", { ascending: true }) as { data: InventoryItem[] | null; error: { message?: string } | null };
 
   const hasTable = !error || !error.message?.includes("does not exist");
   const inventory = hasTable ? (items ?? []) : [];
 
-  const lowStock = inventory.filter(i => i.quantity_on_hand <= (i.reorder_point ?? 2));
+  const lowStock = inventory.filter((i: InventoryItem) => i.quantity_on_hand <= (i.reorder_point ?? 2));
   const totalItems = inventory.length;
-  const totalValue = inventory.reduce((s, i) => s + (i.quantity_on_hand * (i.unit_cost ?? 0)), 0);
+  const totalValue = inventory.reduce((s: number, i: InventoryItem) => s + (i.quantity_on_hand * (i.unit_cost ?? 0)), 0);
 
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-5xl mx-auto">
@@ -77,7 +89,7 @@ export default async function InventoryPage() {
             </span>
           </div>
           <div className="space-y-2">
-            {lowStock.map((item) => (
+            {lowStock.map((item: InventoryItem) => (
               <div key={item.id} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-red-100">
                 <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
                 <span className="text-sm font-medium text-[#1A2744] flex-1">{item.name}</span>
@@ -125,7 +137,7 @@ export default async function InventoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {inventory.map((item) => {
+                {inventory.map((item: InventoryItem) => {
                   const isLow = item.quantity_on_hand <= (item.reorder_point ?? 2);
                   return (
                     <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isLow ? "bg-red-50/30" : ""}`}>

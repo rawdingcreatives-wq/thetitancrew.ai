@@ -18,6 +18,7 @@ import { TechDispatchAgent } from "./TechDispatchAgent";
 import type { AgentConfig, AgentRunResult } from "../base/BaseAgent";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../shared/types/database.types";
+import { createLogger } from "../guardrails/logger";
 
 // ─────────────────────────────────────────────
 // Graph State
@@ -78,9 +79,10 @@ const TRIGGER_ROUTES: Record<TriggerEvent, CrewNode[]> = {
 export class CustomerCrewOrchestrator {
   private accountId: string;
   private supabase: ReturnType<typeof createClient<Database>>;
-  private planTier: "basic" | "pro";
+  private planTier: "lite" | "growth" | "scale";
+  private logger = createLogger("CustomerCrewOrchestrator");
 
-  constructor(accountId: string, planTier: "basic" | "pro" = "basic") {
+  constructor(accountId: string, planTier: "lite" | "growth" | "scale" = "lite") {
     this.accountId = accountId;
     this.planTier = planTier;
     this.supabase = createClient<Database>(
@@ -113,14 +115,14 @@ export class CustomerCrewOrchestrator {
       shouldEnd: false,
     };
 
-    console.log(`[Crew:${this.accountId}] Starting run ${runId} for trigger: ${triggerEvent}`);
+    this.logger.info({ accountId: this.accountId }, `Starting run ${runId} for trigger: ${triggerEvent}`);
 
     try {
       const result = await this.executeGraph(state);
       return result;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[Crew:${this.accountId}] Graph execution failed:`, errMsg);
+      this.logger.error({ accountId: this.accountId, event: "graph_execution_failed", err: errMsg }, "Graph execution failed");
       return {
         runId,
         success: false,
@@ -139,9 +141,9 @@ export class CustomerCrewOrchestrator {
     const plannedNodes = TRIGGER_ROUTES[state.triggerEvent as TriggerEvent] ??
       TRIGGER_ROUTES.manual_trigger;
 
-    // Filter out dispatch agent for Basic tier
+    // Filter out dispatch agent for Lite tier
     const eligibleNodes = plannedNodes.filter(
-      (node) => !(node === "dispatch" && this.planTier === "basic")
+      (node) => !(node === "dispatch" && this.planTier === "lite")
     );
 
     // Execute nodes in planned sequence, with error isolation
@@ -149,7 +151,7 @@ export class CustomerCrewOrchestrator {
       if (state.shouldEnd) break;
 
       state.currentNode = node;
-      console.log(`[Crew:${this.accountId}] Executing node: ${node}`);
+      this.logger.info({ accountId: this.accountId }, `Executing node: ${node}`);
 
       try {
         const result = await this.executeNode(node, state);
@@ -164,7 +166,7 @@ export class CustomerCrewOrchestrator {
       } catch (err) {
         const errMsg = `${node}: ${err instanceof Error ? err.message : String(err)}`;
         state.errors.push(errMsg);
-        console.error(`[Crew:${this.accountId}] Node ${node} threw:`, errMsg);
+        this.logger.error({ accountId: this.accountId, error: errMsg }, `Node ${node} threw`);
       }
 
       // Brief pause between agents to avoid rate limits
@@ -226,10 +228,9 @@ export class CustomerCrewOrchestrator {
   // ─── Checkpoint management (for LangGraph-style resumability) ───
 
   async saveCheckpoint(state: CrewState): Promise<void> {
-    await this.supabase
-      .from("agent_instances")
+    await (this.supabase.from("agent_instances") as any)
       .update({
-        graph_state: state as never,
+        graph_state: state as any,
         checkpoint_id: state.runId,
       })
       .eq("account_id", this.accountId)
@@ -237,8 +238,7 @@ export class CustomerCrewOrchestrator {
   }
 
   async loadCheckpoint(runId: string): Promise<CrewState | null> {
-    const { data } = await this.supabase
-      .from("agent_instances")
+    const { data } = await (this.supabase.from("agent_instances") as any)
       .select("graph_state")
       .eq("account_id", this.accountId)
       .eq("checkpoint_id", runId)
@@ -252,8 +252,7 @@ export class CustomerCrewOrchestrator {
   private async buildAgentConfig(node: CrewNode): Promise<AgentConfig> {
     // Fetch agent instance ID from DB
     const agentType = this.nodeToAgentType(node);
-    const { data: instance } = await this.supabase
-      .from("agent_instances")
+    const { data: instance } = await (this.supabase.from("agent_instances") as any)
       .select("id, system_prompt_override, config")
       .eq("account_id", this.accountId)
       .eq("agent_type", agentType)
@@ -298,11 +297,11 @@ export async function triggerCrewFromWebhook(body: {
   accountId: string;
   event: string;
   payload?: Record<string, unknown>;
-  planTier?: "basic" | "pro";
+  planTier?: "lite" | "growth" | "scale";
 }): Promise<CrewOrchestrationResult> {
   const orchestrator = new CustomerCrewOrchestrator(
     body.accountId,
-    body.planTier ?? "basic"
+    body.planTier ?? "lite"
   );
 
   return orchestrator.run(

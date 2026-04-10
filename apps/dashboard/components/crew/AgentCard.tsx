@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · AgentCard
  * Full-detail card for a single agent: status, toggle, run history, trigger button.
@@ -10,7 +9,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calendar, Package, MessageSquare, DollarSign, Cpu, Truck,
-  Bot, Play, Lock, Check, AlertTriangle, ChevronDown, ChevronUp,
+  Bot, Play, Lock, Check, ChevronDown, ChevronUp,
   Clock, Activity,
 } from "lucide-react";
 import type { AgentType, AgentStatus } from "@/lib/supabase/types";

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Activity, Bot, Tag, Building2 } from "lucide-react";
 
 interface AuditLogSummaryProps {

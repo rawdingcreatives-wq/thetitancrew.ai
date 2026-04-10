@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew — Case Study PATCH route
  * PATCH /api/growth/case-studies/:id
@@ -8,6 +7,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { z } from "zod";
+
+interface Account {
+  id: string;
+}
 
 const PatchSchema = z.object({
   status: z.enum(["draft", "published", "testimonial_requested"]),
@@ -19,11 +22,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: account } = await supabase
+  const { data: account } = await (supabase as any)
     .from("accounts")
     .select("id")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
 
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
@@ -40,11 +43,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     update.published_at = null;
   }
 
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from("case_studies")
     .update(update)
     .eq("id", id)
-    .eq("account_id", account.id);
+    .eq("account_id", account.id) as { error?: { message: string } };
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

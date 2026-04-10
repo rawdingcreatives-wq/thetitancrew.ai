@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · CrewSummaryBar
  * Top-of-crew-page strip: global run trigger + health summary.

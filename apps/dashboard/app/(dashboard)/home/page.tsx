@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Dashboard Home Page (/home)
  *
@@ -18,12 +17,79 @@ import { AgentStatusStrip } from "@/components/crew/AgentStatusStrip";
 import { HILConfirmBanner } from "@/components/shared/HILConfirmBanner";
 import { QuickActions } from "@/components/shared/QuickActions";
 import { MetricsRow } from "@/components/analytics/MetricsRow";
+
+interface DashboardAccount {
+  id: string;
+  business_name: string;
+  owner_name: string;
+  plan: string;
+  jobs_booked_30d: number;
+  jobs_ai_booked_30d: number;
+  revenue_ai_30d: number;
+  churn_risk_score: number;
+  onboard_step: number;
+  crew_deployed_at: string | null;
+}
+
+interface Customer {
+  name: string;
+  phone: string;
+}
+
+interface Technician {
+  name: string;
+}
+
+interface JobData {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  scheduled_start: string;
+  estimate_amount: number;
+  invoice_amount: number;
+  booked_by_ai: boolean;
+  source: string;
+  trade_customers: Customer;
+  technicians: Technician;
+}
+
+interface AgentInstanceData {
+  id: string;
+  agent_type: string;
+  status: string;
+  actions_24h: number;
+  errors_24h: number;
+  last_run_at: string;
+  token_cost_30d: number;
+}
+
+interface HILConfirmation {
+  id: string;
+  description: string;
+  amount: number;
+  action_type: string;
+  risk_level: string;
+  expires_at: string;
+  response_token: string;
+}
+
+interface TodayJob {
+  invoice_amount: number;
+  booked_by_ai: boolean;
+}
+
+interface AccountData {
+  id: string;
+  onboard_step: number;
+  crew_deployed_at: string | null;
+}
+
 // ─── Data fetching ────────────────────────────────────────
 
 async function getDashboardData(accountId: string) {
   const supabase = await createClient();
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
   const [accountRes, jobsRes, agentsRes, hilRes] = await Promise.all([
@@ -39,13 +105,13 @@ async function getDashboardData(accountId: string) {
       .eq("account_id", accountId)
       .not("status", "in", '("paid","canceled")')
       .order("scheduled_start", { ascending: true })
-      .limit(20),
+      .limit(20) as unknown as { data: JobData[] | null },
 
     supabase
       .from("agent_instances")
       .select("id, agent_type, status, actions_24h, errors_24h, last_run_at, token_cost_30d")
       .eq("account_id", accountId)
-      .eq("is_enabled", true),
+      .eq("is_enabled", true) as unknown as { data: AgentInstanceData[] | null },
 
     supabase
       .from("hil_confirmations")
@@ -57,20 +123,20 @@ async function getDashboardData(accountId: string) {
   ]);
 
   // Today's revenue
-  const { data: todayJobs } = await supabase
-    .from("jobs")
+  const todayJobsRes = await supabase.from("jobs")
     .select("invoice_amount, booked_by_ai")
     .eq("account_id", accountId)
     .gte("scheduled_start", todayStart)
     .in("status", ["scheduled", "in_progress", "completed", "invoiced", "paid"]);
+  const todayJobs = todayJobsRes.data;
 
-  const todayRevenue = (todayJobs ?? []).reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
+  const todayRevenue = (todayJobs ?? []).reduce((s: number, j: TodayJob) => s + (j.invoice_amount ?? 0), 0);
 
   return {
-    account: accountRes.data,
-    jobs: jobsRes.data ?? [],
-    agents: agentsRes.data ?? [],
-    pendingHIL: hilRes.data ?? [],
+    account: accountRes.data as DashboardAccount | null,
+    jobs: (jobsRes.data ?? []) as JobData[],
+    agents: (agentsRes.data ?? []) as AgentInstanceData[],
+    pendingHIL: (hilRes.data ?? []) as HILConfirmation[],
     todayRevenue,
   };
 }
@@ -88,12 +154,14 @@ export default async function DashboardPage() {
     .from("accounts")
     .select("id, onboard_step, crew_deployed_at")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: AccountData | null };
 
   if (!account) redirect("/onboarding");
 
-  // Redirect to onboarding if not complete
-  if (!account.crew_deployed_at && (account.onboard_step ?? 0) < 9) {
+  // Redirect to onboarding if crew was never successfully deployed.
+  // crew_deployed_at is the canonical signal — it is only set after the agent
+  // trigger succeeds (via /api/account/complete-onboarding or OnboarderAgent).
+  if (!account.crew_deployed_at) {
     redirect("/onboarding");
   }
 
@@ -102,7 +170,7 @@ export default async function DashboardPage() {
   return (
     <div className="p-4 lg:p-6 space-y-5 max-w-7xl mx-auto">
       {/* Pending HIL confirmation banners (top priority) */}
-      {data.pendingHIL.map((hil) => (
+      {data.pendingHIL.map((hil: HILConfirmation) => (
         <HILConfirmBanner key={hil.id} confirmation={hil} />
       ))}
 
@@ -125,7 +193,8 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* Left: Live Job Feed (2/3 width) */}
         <div className="xl:col-span-2 space-y-5">
-          <LiveJobFeed jobs={data.jobs} />
+          {/* JobData structurally matches LiveJobFeed's Job interface at runtime */}
+          <LiveJobFeed jobs={data.jobs as unknown as Parameters<typeof LiveJobFeed>[0]["jobs"]} />
         </div>
 
         {/* Right: AI Revenue + Agent Status (1/3 width) */}
@@ -135,7 +204,7 @@ export default async function DashboardPage() {
             jobsAI30d={data.account?.jobs_ai_booked_30d ?? 0}
             jobsTotal30d={data.account?.jobs_booked_30d ?? 0}
           />
-          <AgentStatusStrip agents={data.agents} />
+          <AgentStatusStrip agents={data.agents as unknown as Parameters<typeof AgentStatusStrip>[0]["agents"]} />
           <QuickActions accountId={account.id} />
         </div>
       </div>

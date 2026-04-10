@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Scheduling Agent — Propose Slots
  *
@@ -39,6 +38,31 @@ const MAX_JOBS_PER_DAY = 8;
 const DEFAULT_DURATION = 120; // minutes
 const SEARCH_DAYS = 7;
 
+interface Technician {
+  id: string;
+  name: string;
+  phone: string;
+  trade_type: string;
+  skill_tags: string[];
+  efficiency_score: number;
+  calendar_id: string;
+}
+
+interface Job {
+  id: string;
+  technician_id: string;
+  scheduled_start: string;
+  scheduled_end: string;
+  address: string;
+  status: string;
+}
+
+interface BusySlot {
+  start: number;
+  end: number;
+  address: string;
+}
+
 interface Proposal {
   techId: string;
   techName: string;
@@ -66,12 +90,12 @@ export async function POST(req: NextRequest) {
   const {
     accountId,
     tradeType,
-    address,
+    address: _address,
     estimatedDuration = DEFAULT_DURATION,
     preferredDate,
     urgency = "normal",
-    customerId,
-    notes,
+    customerId: _customerId,
+    notes: _notes,
   } = body;
 
   if (!accountId) {
@@ -89,7 +113,10 @@ export async function POST(req: NextRequest) {
     techQuery.eq("trade_type", tradeType);
   }
 
-  const { data: techs, error: techErr } = await techQuery;
+  const { data: techs, error: techErr } = await techQuery as {
+    data: Technician[] | null;
+    error: { message: string } | null;
+  };
 
   if (techErr || !techs?.length) {
     return NextResponse.json({
@@ -117,16 +144,16 @@ export async function POST(req: NextRequest) {
     .in("status", ["scheduled", "dispatched", "in_progress"])
     .gte("scheduled_start", searchStart.toISOString())
     .lte("scheduled_start", searchEnd.toISOString())
-    .order("scheduled_start", { ascending: true });
+    .order("scheduled_start", { ascending: true }) as { data: Job[] | null };
 
-  const jobs = existingJobs ?? [];
+  const jobs: Job[] = existingJobs ?? [];
 
   // ── Build availability map per tech ─────────────────────────
   const proposals: Proposal[] = [];
 
   for (const tech of techs) {
     // Get this tech's jobs in the window
-    const techJobs = jobs.filter((j: any) => j.technician_id === tech.id);
+    const techJobs = jobs.filter((j: Job) => j.technician_id === tech.id);
 
     // Check each day in the window
     const currentDay = new Date(searchStart);
@@ -144,7 +171,7 @@ export async function POST(req: NextRequest) {
       const dayEnd = new Date(currentDay);
       dayEnd.setHours(18, 0, 0, 0);
 
-      const dayJobs = techJobs.filter((j: any) => {
+      const dayJobs = techJobs.filter((j: Job) => {
         const jStart = new Date(j.scheduled_start);
         return jStart >= dayStart && jStart < dayEnd;
       });
@@ -155,17 +182,17 @@ export async function POST(req: NextRequest) {
       }
 
       // Find available slots (simple gap-finding)
-      const busySlots = dayJobs
-        .map((j: any) => ({
+      const busySlots: BusySlot[] = dayJobs
+        .map((j: Job) => ({
           start: new Date(j.scheduled_start).getTime(),
           end: new Date(j.scheduled_end || new Date(new Date(j.scheduled_start).getTime() + 2 * 3600000)).getTime(),
           address: j.address,
         }))
-        .sort((a: any, b: any) => a.start - b.start);
+        .sort((a: BusySlot, b: BusySlot) => a.start - b.start);
 
       // Try slots starting at 8am, then after each existing job
       const slotCandidates = [dayStart.getTime()];
-      busySlots.forEach((slot: any) => {
+      busySlots.forEach((slot: BusySlot) => {
         slotCandidates.push(slot.end + BUFFER_MINUTES * 60000);
       });
 
@@ -177,7 +204,7 @@ export async function POST(req: NextRequest) {
 
         // Must not overlap with any busy slot
         const overlaps = busySlots.some(
-          (slot: any) =>
+          (slot: BusySlot) =>
             candidateStart < slot.end + BUFFER_MINUTES * 60000 &&
             candidateEnd > slot.start - BUFFER_MINUTES * 60000
         );

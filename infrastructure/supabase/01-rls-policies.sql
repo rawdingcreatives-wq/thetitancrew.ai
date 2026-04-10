@@ -89,7 +89,7 @@ CREATE POLICY jobs_account_delete ON jobs
   FOR DELETE
   USING (
     account_id = auth.account_id()
-    AND status = 'cancelled' -- Can only delete cancelled jobs from UI
+    AND status = 'canceled' -- Must match job_status enum (American spelling)
   );
 
 -- ─── trade_customers ──────────────────────────────────────
@@ -210,7 +210,7 @@ CREATE POLICY hil_account_update ON hil_confirmations
   )
   WITH CHECK (
     account_id = auth.account_id()
-    AND action IN ('approved', 'rejected') -- Only valid responses
+    AND status IN ('approved', 'rejected') -- Only valid status transitions
   );
 
 -- ─── comms_log ────────────────────────────────────────────
@@ -369,7 +369,7 @@ DECLARE
   v_plan text;
   v_budget numeric;
   v_current_spend numeric;
-  v_plan_budgets jsonb := '{"basic": 8, "pro": 15}'::jsonb;
+  v_plan_budgets jsonb := '{"lite": 8, "growth": 15, "scale": 25}'::jsonb;
 BEGIN
   -- Get account plan
   SELECT plan INTO v_plan

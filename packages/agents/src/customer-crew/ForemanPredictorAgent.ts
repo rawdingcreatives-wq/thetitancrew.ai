@@ -77,23 +77,22 @@ MEMORY & LEARNING:
         const daysAhead = (input.days_ahead as number) ?? 7;
         const cutoff = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString();
 
-        const { data: jobs } = await this.supabase
-          .from("jobs")
+        const { data: jobs } = await (this.supabase.from("jobs") as any)
           .select("id, title, status, priority, scheduled_start, estimate_amount, invoice_amount, booked_by_ai, technician_id, job_type")
           .eq("account_id", this.config.accountId)
           .not("status", "in", '("paid","canceled")')
           .or(`scheduled_start.lte.${cutoff},status.eq.lead`);
 
         const grouped = {
-          leads: (jobs ?? []).filter((j) => j.status === "lead"),
-          scheduled: (jobs ?? []).filter((j) => j.status === "scheduled"),
-          inProgress: (jobs ?? []).filter((j) => j.status === "in_progress"),
-          completed: (jobs ?? []).filter((j) => j.status === "completed"),
-          invoiced: (jobs ?? []).filter((j) => j.status === "invoiced"),
+          leads: (jobs ?? []).filter((j: any) => j.status === "lead"),
+          scheduled: (jobs ?? []).filter((j: any) => j.status === "scheduled"),
+          inProgress: (jobs ?? []).filter((j: any) => j.status === "in_progress"),
+          completed: (jobs ?? []).filter((j: any) => j.status === "completed"),
+          invoiced: (jobs ?? []).filter((j: any) => j.status === "invoiced"),
         };
 
-        const totalPipelineValue = (jobs ?? []).reduce((s, j) => s + (j.estimate_amount ?? 0), 0);
-        const aiBookedCount = (jobs ?? []).filter((j) => j.booked_by_ai).length;
+        const totalPipelineValue = (jobs ?? []).reduce((s: any, j: any) => s + (j.estimate_amount ?? 0), 0);
+        const aiBookedCount = (jobs ?? []).filter((j: any) => j.booked_by_ai).length;
 
         return {
           summary: {
@@ -120,24 +119,22 @@ MEMORY & LEARNING:
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 7);
 
-        const { data: techs } = await this.supabase
-          .from("technicians")
+        const { data: techs } = await (this.supabase.from("technicians") as any)
           .select("id, name, efficiency_score")
           .eq("account_id", this.config.accountId)
           .eq("is_active", true);
 
-        const { data: jobs } = await this.supabase
-          .from("jobs")
+        const { data: jobs } = await (this.supabase.from("jobs") as any)
           .select("technician_id, scheduled_start, scheduled_end, status")
           .eq("account_id", this.config.accountId)
           .in("status", ["scheduled", "dispatched", "in_progress", "completed"])
           .gte("scheduled_start", weekStart.toISOString())
           .lte("scheduled_start", weekEnd.toISOString());
 
-        const utilization = (techs ?? []).map((tech) => {
-          const techJobs = (jobs ?? []).filter((j) => j.technician_id === tech.id);
+        const utilization = (techs ?? []).map((tech: any) => {
+          const techJobs = (jobs ?? []).filter((j: any) => j.technician_id === tech.id);
           // Assume 9-hour workday × 5 days = 45 available hours/week
-          const bookedHours = techJobs.reduce((s, j) => {
+          const bookedHours = techJobs.reduce((s: any, j: any) => {
             if (!j.scheduled_start || !j.scheduled_end) return s + 2; // Default 2h job
             return s + (new Date(j.scheduled_end).getTime() - new Date(j.scheduled_start).getTime()) / (1000 * 60 * 60);
           }, 0);
@@ -154,7 +151,7 @@ MEMORY & LEARNING:
           };
         });
 
-        return { technicians: utilization, avgUtilization: utilization.length > 0 ? utilization.reduce((s, t) => s + t.utilizationPct, 0) / utilization.length : 0 };
+        return { technicians: utilization, avgUtilization: utilization.length > 0 ? utilization.reduce((s: any, t: any) => s + t.utilizationPct, 0) / utilization.length : 0 };
       },
     });
 
@@ -174,8 +171,7 @@ MEMORY & LEARNING:
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
         // Customers due for recurring service
-        const { data: dueForService } = await this.supabase
-          .from("trade_customers")
+        const { data: dueForService } = await (this.supabase.from("trade_customers") as any)
           .select("id, name, phone, last_service_at, total_spent, total_jobs, tags, next_service_at")
           .eq("account_id", this.config.accountId)
           .eq("comms_opt_out", false)
@@ -186,8 +182,7 @@ MEMORY & LEARNING:
 
         // Recent emergency jobs → sell preventative maintenance
         const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-        const { data: emergencyJobs } = await this.supabase
-          .from("jobs")
+        const { data: emergencyJobs } = await (this.supabase.from("jobs") as any)
           .select(`
             id, title, actual_end,
             trade_customers!inner(id, name, phone, comms_opt_out)
@@ -217,26 +212,26 @@ MEMORY & LEARNING:
         const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
         const [thisMonthJobs, lastMonthJobs, overdueCount] = await Promise.all([
-          this.supabase.from("jobs").select("invoice_amount, booked_by_ai, status")
+          (this.supabase.from("jobs") as any).select("invoice_amount, booked_by_ai, status")
             .eq("account_id", this.config.accountId)
             .gte("actual_end", monthStart.toISOString())
             .in("status", ["completed", "invoiced", "paid"]),
 
-          this.supabase.from("jobs").select("invoice_amount")
+          (this.supabase.from("jobs") as any).select("invoice_amount")
             .eq("account_id", this.config.accountId)
             .gte("actual_end", lastMonthStart.toISOString())
             .lte("actual_end", lastMonthEnd.toISOString())
             .in("status", ["completed", "invoiced", "paid"]),
 
-          this.supabase.from("jobs").select("id", { count: "exact" })
+          (this.supabase.from("jobs") as any).select("id", { count: "exact" })
             .eq("account_id", this.config.accountId)
             .eq("status", "invoiced")
-            .lt("updated_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+            .lt("updated_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
         ]);
 
-        const thisMonthRevenue = (thisMonthJobs.data ?? []).reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
-        const lastMonthRevenue = (lastMonthJobs.data ?? []).reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
-        const aiBookedRevenue = (thisMonthJobs.data ?? []).filter((j) => j.booked_by_ai).reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
+        const thisMonthRevenue = (thisMonthJobs.data ?? []).reduce((s: any, j: any) => s + (j.invoice_amount ?? 0), 0);
+        const lastMonthRevenue = (lastMonthJobs.data ?? []).reduce((s: any, j: any) => s + (j.invoice_amount ?? 0), 0);
+        const aiBookedRevenue = (thisMonthJobs.data ?? []).filter((j: any) => j.booked_by_ai).reduce((s: any, j: any) => s + (j.invoice_amount ?? 0), 0);
         const revChange = lastMonthRevenue > 0 ? ((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue * 100).toFixed(1) : "N/A";
 
         return {
@@ -262,8 +257,7 @@ MEMORY & LEARNING:
       },
       riskLevel: "low",
       handler: async (input, ctx) => {
-        const { data: account } = await this.supabase
-          .from("accounts")
+        const { data: account } = await (this.supabase.from("accounts") as any)
           .select("phone, notification_prefs, owner_name")
           .eq("id", this.config.accountId)
           .single();
@@ -304,7 +298,7 @@ MEMORY & LEARNING:
         if (input.nps_score !== undefined) updates.nps_score = input.nps_score;
         updates.last_active_at = new Date().toISOString();
 
-        await this.supabase.from("accounts").update(updates).eq("id", this.config.accountId);
+        await (this.supabase.from("accounts") as any).update(updates).eq("id", this.config.accountId);
         return { updated: true, fields: Object.keys(updates) };
       },
     });
@@ -369,8 +363,7 @@ Be analytical, specific, and action-oriented. The owner is on a job site — kee
   }
 
   private async getOwnerName(): Promise<string> {
-    const { data } = await this.supabase
-      .from("accounts")
+    const { data } = await (this.supabase.from("accounts") as any)
       .select("owner_name")
       .eq("id", this.config.accountId)
       .single();

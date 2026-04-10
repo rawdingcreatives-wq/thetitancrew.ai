@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Finance Page
  * Revenue overview, invoices, payments, and AI-attributed income.
@@ -6,46 +5,64 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { DollarSign, TrendingUp, FileText, CheckCircle2, Clock, AlertCircle, Zap } from "lucide-react";
+import { DollarSign, TrendingUp, FileText, Clock, Zap } from "lucide-react";
+
+interface Account {
+  id: string;
+  business_name: string;
+  plan: string;
+  revenue_ai_30d: number;
+  jobs_booked_30d: number;
+  jobs_ai_booked_30d: number;
+}
+
+interface Job {
+  id: string;
+  customer_name: string;
+  status: string;
+  invoice_amount: number;
+  booked_by_ai: boolean;
+  created_at: string;
+  actual_end: string;
+  job_type: string;
+}
 
 export default async function FinancePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select("id, business_name, plan, revenue_ai_30d, jobs_booked_30d, jobs_ai_booked_30d")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
   if (!account) redirect("/login");
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const sixtyDaysAgo  = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: recentJobs } = await supabase
-    .from("jobs")
+  const { data: recentJobs } = await supabase.from("jobs")
     .select("id, customer_name, status, invoice_amount, booked_by_ai, created_at, actual_end, job_type")
     .eq("account_id", account.id)
     .gte("created_at", sixtyDaysAgo)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(50) as { data: Job[] | null };
 
   const jobs = recentJobs ?? [];
-  const thisMonth  = jobs.filter(j => j.created_at >= thirtyDaysAgo);
-  const lastMonth  = jobs.filter(j => j.created_at < thirtyDaysAgo);
+  const thisMonth  = jobs.filter((j: Job) => j.created_at >= thirtyDaysAgo);
+  const lastMonth  = jobs.filter((j: Job) => j.created_at < thirtyDaysAgo);
 
-  const revenue30d   = thisMonth.filter(j => ["completed","invoiced","paid"].includes(j.status))
-                                .reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
-  const revenuePrev  = lastMonth.filter(j => ["completed","invoiced","paid"].includes(j.status))
-                                .reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
+  const revenue30d   = thisMonth.filter((j: Job) => ["completed","invoiced","paid"].includes(j.status))
+                                .reduce((s: number, j: Job) => s + (j.invoice_amount ?? 0), 0);
+  const revenuePrev  = lastMonth.filter((j: Job) => ["completed","invoiced","paid"].includes(j.status))
+                                .reduce((s: number, j: Job) => s + (j.invoice_amount ?? 0), 0);
   const revenueChange = revenuePrev > 0 ? Math.round(((revenue30d - revenuePrev) / revenuePrev) * 100) : 0;
 
-  const outstanding  = jobs.filter(j => j.status === "invoiced").reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
-  const outstandingJobs = jobs.filter(j => j.status === "invoiced");
+  const outstanding  = jobs.filter((j: Job) => j.status === "invoiced").reduce((s: number, j: Job) => s + (j.invoice_amount ?? 0), 0);
+  const outstandingJobs = jobs.filter((j: Job) => j.status === "invoiced");
 
   const aiRevenue    = account.revenue_ai_30d ?? 0;
-  const planCost     = account.plan === "pro" ? 799 : 399;
+  const planCost     = account.plan === "growth" ? 799 : account.plan === "scale" ? 1299 : 399;
   const roi          = revenue30d > 0 ? Math.round(((revenue30d - planCost) / planCost) * 100) : 0;
 
   function formatCurrency(n: number) {
@@ -122,7 +139,7 @@ export default async function FinancePage() {
         <div>
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Outstanding Invoices</h2>
           <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
-            {outstandingJobs.map((job) => (
+            {outstandingJobs.map((job: Job) => (
               <div key={job.id} className="flex items-center gap-4 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-amber-50/30 transition-colors">
                 <Clock className="w-4 h-4 text-amber-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -172,8 +189,8 @@ export default async function FinancePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {jobs.slice(0, 20).map((job) => {
-                    const sc = statusConfig[job.status] ?? { label: job.status, color: "text-slate-600 bg-slate-50" };
+                  {jobs.slice(0, 20).map((job: Job) => {
+                    const sc = statusConfig[job.status as keyof typeof statusConfig] ?? { label: job.status, color: "text-slate-600 bg-slate-50" };
                     return (
                       <tr key={job.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3">

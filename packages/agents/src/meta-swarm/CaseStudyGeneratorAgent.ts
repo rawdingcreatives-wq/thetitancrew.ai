@@ -16,8 +16,13 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+// @ts-ignore
 import { createServiceClient } from "@/lib/supabase/service";
+// @ts-ignore
 import { auditLog } from "@titancrew/agents/src/guardrails/AuditLogger";
+// @ts-ignore
+import { createLogger } from "../guardrails/logger";
+// @ts-ignore
 import { integrationOrchestrator } from "@titancrew/agents/src/tools/integrations/IntegrationOrchestrator";
 import twilio from "twilio";
 
@@ -91,6 +96,7 @@ export async function runCaseStudyGeneratorAgent(
   const supabase = createServiceClient();
   const client = new Anthropic();
   const runId = crypto.randomUUID();
+  const csLog = createLogger("CaseStudyGeneratorAgent");
 
   await auditLog({
     accountId: req.accountId,
@@ -102,46 +108,43 @@ export async function runCaseStudyGeneratorAgent(
   try {
     // ── 1. Check if case study already exists ──────────────────
     if (!req.forceRegenerate) {
-      const { data: existing } = await supabase
-        .from("case_studies")
+      const { data: existing } = await (supabase.from("case_studies") as any)
         .select("id")
         .eq("job_id", req.jobId)
         .single();
 
       if (existing) {
-        console.log(`[CaseStudy] Already exists for job ${req.jobId}, skipping`);
+        csLog.info({ event: "case_study_already_exists", jobId: req.jobId }, "Already exists for job");
         return null;
       }
     }
 
     // ── 2. Fetch job data ──────────────────────────────────────
-    const { data: job, error: jobErr } = await supabase
-      .from("jobs")
+    const { data: job, error: jobErr } = await (supabase.from("jobs") as any)
       .select("*")
       .eq("id", req.jobId)
       .eq("account_id", req.accountId)
       .single();
 
     if (jobErr || !job) {
-      console.error("[CaseStudy] Job not found:", req.jobId);
+      csLog.error({ event: "job_not_found", jobId: req.jobId, err: jobErr?.message }, "Job not found");
       return null;
     }
 
     // Only generate for completed, invoiced jobs with good data
     if (job.status !== "completed" || !job.invoice_amount || job.invoice_amount < 100) {
-      console.log(`[CaseStudy] Job ${req.jobId} not eligible (status=${job.status}, amount=${job.invoice_amount})`);
+      csLog.warn({ event: "job_not_eligible", jobId: req.jobId, status: job.status, amount: job.invoice_amount }, "Job not eligible");
       return null;
     }
 
     // ── 3. Fetch account profile ───────────────────────────────
-    const { data: account } = await supabase
-      .from("accounts")
+    const { data: account } = await (supabase.from("accounts") as any)
       .select("id, business_name, trade_type, owner_name, city, state, years_in_business, website, google_place_id")
       .eq("id", req.accountId)
       .single();
 
     if (!account) {
-      console.error("[CaseStudy] Account not found:", req.accountId);
+      csLog.error({ event: "account_not_found", accountId: req.accountId }, "Account not found");
       return null;
     }
 
@@ -190,14 +193,13 @@ export async function runCaseStudyGeneratorAgent(
     };
 
     // ── 7. Save to Supabase ────────────────────────────────────
-    const { data: saved, error: saveErr } = await supabase
-      .from("case_studies")
+    const { data: saved, error: saveErr } = await (supabase.from("case_studies") as any)
       .insert({ id: caseStudyId, ...caseStudy })
       .select()
       .single();
 
     if (saveErr) {
-      console.error("[CaseStudy] Save failed:", saveErr.message);
+      csLog.error({ event: "case_study_save_failed", jobId: req.jobId, accountId: req.accountId, err: saveErr.message }, "Save failed");
       return null;
     }
 
@@ -213,8 +215,7 @@ export async function runCaseStudyGeneratorAgent(
         req.jobId
       );
 
-      await supabase
-        .from("case_studies")
+      await (supabase.from("case_studies") as any)
         .update({ status: "testimonial_requested" })
         .eq("id", caseStudyId);
     }
@@ -236,7 +237,7 @@ export async function runCaseStudyGeneratorAgent(
 
     return saved;
   } catch (err) {
-    console.error("[CaseStudyGeneratorAgent] Fatal error:", err);
+    csLog.error({ event: "case_study_generation_fatal_error", jobId: req.jobId, accountId: req.accountId, err: String(err) }, "Fatal error");
     await auditLog({
       accountId: req.accountId,
       agentName: "CaseStudyGeneratorAgent",
@@ -251,12 +252,12 @@ export async function runCaseStudyGeneratorAgent(
 
 export async function runWeeklyCaseStudyBatch(): Promise<void> {
   const supabase = createServiceClient();
+  const batchLog = createLogger("CaseStudyBatch");
 
   // Find completed jobs from the past 7 days that don't have case studies yet
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: newJobs } = await supabase
-    .from("jobs")
+  const { data: newJobs } = await (supabase.from("jobs") as any)
     .select("id, account_id")
     .eq("status", "completed")
     .gte("completed_at", sevenDaysAgo)
@@ -266,17 +267,17 @@ export async function runWeeklyCaseStudyBatch(): Promise<void> {
     ) as any);
 
   if (!newJobs || newJobs.length === 0) {
-    console.log("[CaseStudyBatch] No new eligible jobs found");
+    batchLog.info({ event: "no_eligible_jobs_found" }, "No new eligible jobs found");
     return;
   }
 
-  console.log(`[CaseStudyBatch] Processing ${newJobs.length} new jobs`);
+  batchLog.info({ event: "processing_batch", jobCount: newJobs.length }, "Processing batch");
 
   // Process in batches of 5 to avoid rate limits
   for (let i = 0; i < newJobs.length; i += 5) {
     const batch = newJobs.slice(i, i + 5);
     await Promise.allSettled(
-      batch.map((job) =>
+      batch.map((job: any) =>
         runCaseStudyGeneratorAgent({ accountId: job.account_id, jobId: job.id })
       )
     );
@@ -285,7 +286,7 @@ export async function runWeeklyCaseStudyBatch(): Promise<void> {
     }
   }
 
-  console.log(`[CaseStudyBatch] Complete`);
+  batchLog.info({ event: "batch_complete", totalJobs: newJobs.length }, "Batch complete");
 }
 
 // ─── Content Generation ────────────────────────────────────────
@@ -436,6 +437,7 @@ async function sendTestimonialRequestSMS(
   accountId: string,
   jobId: string
 ): Promise<void> {
+  const smsLog = createLogger("CaseStudyGeneratorAgent");
   const twilioClient = twilio(
     process.env.TWILIO_ACCOUNT_SID,
     process.env.TWILIO_AUTH_TOKEN
@@ -459,7 +461,7 @@ async function sendTestimonialRequestSMS(
       details: { jobId, customerName, hasGoogleLink: !!googleReviewUrl },
     });
   } catch (err) {
-    console.error("[CaseStudy] SMS send failed:", err);
+    smsLog.error({ event: "sms_send_failed", jobId, accountId, customerPhone: phone, err: String(err) }, "SMS send failed");
   }
 }
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 /**
@@ -25,7 +24,7 @@ interface RealtimeQueryOptions {
   limit?: number;
 }
 
-export function useRealtimeQuery<T = any>(
+export function useRealtimeQuery<T = unknown>(
   table: string,
   options: RealtimeQueryOptions = {}
 ) {
@@ -33,21 +32,38 @@ export function useRealtimeQuery<T = any>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const supabaseRef = useRef<SupabaseClient | null>(null);
+  const filterColumnRef = useRef(options.filter?.column);
+  const filterValueRef = useRef(options.filter?.value);
+  const orderByColumnRef = useRef(options.orderBy?.column);
+  const selectRef = useRef(options.select);
+  const limitRef = useRef(options.limit);
 
   const fetchData = useCallback(async () => {
     if (!supabaseRef.current) supabaseRef.current = createClient();
     const supabase = supabaseRef.current;
 
-    let query = supabase.from(table).select(options.select ?? "*");
-    if (options.filter) query = query.eq(options.filter.column, options.filter.value);
-    if (options.orderBy) query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending ?? false });
-    if (options.limit) query = query.limit(options.limit);
+    let query = supabase.from(table).select(selectRef.current ?? "*");
+    if (filterColumnRef.current && filterValueRef.current !== undefined) {
+      query = query.eq(filterColumnRef.current, filterValueRef.current);
+    }
+    if (orderByColumnRef.current) {
+      query = query.order(orderByColumnRef.current, { ascending: options.orderBy?.ascending ?? false });
+    }
+    if (limitRef.current) query = query.limit(limitRef.current);
 
     const { data: result, error: queryError } = await query;
     if (queryError) setError(queryError.message);
     else { setData((result ?? []) as T[]); setError(null); }
     setLoading(false);
-  }, [table, options.select, options.filter?.column, options.filter?.value, options.orderBy?.column, options.limit]);
+  }, [table, options.orderBy?.ascending]);
+
+  useEffect(() => {
+    filterColumnRef.current = options.filter?.column;
+    filterValueRef.current = options.filter?.value;
+    orderByColumnRef.current = options.orderBy?.column;
+    selectRef.current = options.select;
+    limitRef.current = options.limit;
+  }, [options.filter?.column, options.filter?.value, options.orderBy?.column, options.select, options.limit]);
 
   useEffect(() => {
     if (!supabaseRef.current) supabaseRef.current = createClient();
@@ -55,14 +71,14 @@ export function useRealtimeQuery<T = any>(
 
     fetchData();
 
-    const channelName = `realtime:${table}:${options.filter?.column ?? "all"}:${options.filter?.value ?? "all"}`;
+    const channelName = `realtime:${table}:${filterColumnRef.current ?? "all"}:${filterValueRef.current ?? "all"}`;
     const channel = supabase
       .channel(channelName)
       .on("postgres_changes", {
         event: "*",
         schema: "public",
         table,
-        ...(options.filter ? { filter: `${options.filter.column}=eq.${options.filter.value}` } : {}),
+        ...(filterColumnRef.current && filterValueRef.current !== undefined ? { filter: `${filterColumnRef.current}=eq.${filterValueRef.current}` } : {}),
       }, () => fetchData())
       .subscribe();
 
@@ -92,22 +108,27 @@ export function useRealtimeKPIs(accountId: string) {
   });
   const [loading, setLoading] = useState(true);
   const supabaseRef = useRef<SupabaseClient | null>(null);
+  const accountIdRef = useRef(accountId);
+
+  useEffect(() => {
+    accountIdRef.current = accountId;
+  }, [accountId]);
 
   const fetchKpis = useCallback(async () => {
     if (!supabaseRef.current) supabaseRef.current = createClient();
     const supabase = supabaseRef.current;
 
     const [jobsRes, agentsRes, approvalsRes, customersRes] = await Promise.all([
-      supabase.from("jobs").select("id, status, total_amount").eq("account_id", accountId),
-      supabase.from("agent_instances").select("agent_type").eq("account_id", accountId).eq("is_enabled", true),
-      supabase.from("hil_confirmations").select("id").eq("account_id", accountId).eq("status", "pending"),
-      supabase.from("trade_customers").select("id").eq("account_id", accountId),
+      supabase.from("jobs").select("id, status, invoice_amount").eq("account_id", accountIdRef.current) as unknown as Promise<{data: Array<{id: string; status: string; invoice_amount: number | null}> | null}>,
+      supabase.from("agent_instances").select("agent_type").eq("account_id", accountIdRef.current).eq("is_enabled", true) as unknown as Promise<{data: Array<{agent_type: string}> | null}>,
+      supabase.from("hil_confirmations").select("id").eq("account_id", accountIdRef.current).eq("status", "pending") as unknown as Promise<{data: Array<{id: string}> | null}>,
+      supabase.from("trade_customers").select("id").eq("account_id", accountIdRef.current) as unknown as Promise<{data: Array<{id: string}> | null}>,
     ]);
 
-    const jobs = jobsRes.data ?? [];
+    const jobs: Array<{ id: string; status: string; invoice_amount: number | null }> = jobsRes.data ?? [];
     const completed = jobs.filter((j) => j.status === "completed" || j.status === "invoiced" || j.status === "paid");
     const pending = jobs.filter((j) => j.status === "scheduled" || j.status === "dispatched" || j.status === "in_progress");
-    const revenue = completed.reduce((sum, j) => sum + (j.total_amount ?? 0), 0);
+    const revenue = completed.reduce((sum, j) => sum + (j.invoice_amount ?? 0), 0);
 
     setKpis({
       totalJobs: jobs.length,
@@ -120,7 +141,7 @@ export function useRealtimeKPIs(accountId: string) {
       customerCount: customersRes.data?.length ?? 0,
     });
     setLoading(false);
-  }, [accountId]);
+  }, []);
 
   useEffect(() => {
     if (!supabaseRef.current) supabaseRef.current = createClient();
@@ -129,12 +150,12 @@ export function useRealtimeKPIs(accountId: string) {
 
     const tables = ["jobs", "agent_instances", "hil_confirmations", "trade_customers"];
     const channels = tables.map((t) =>
-      supabase.channel(`kpis:${t}:${accountId}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: t, filter: `account_id=eq.${accountId}` }, () => fetchKpis())
+      supabase.channel(`kpis:${t}:${accountIdRef.current}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: t, filter: `account_id=eq.${accountIdRef.current}` }, () => fetchKpis())
         .subscribe()
     );
     return () => { channels.forEach((ch) => supabase.removeChannel(ch)); };
-  }, [accountId, fetchKpis]);
+  }, [fetchKpis]);
 
   return { kpis, loading, refetch: fetchKpis };
 }
@@ -163,11 +184,11 @@ export function useRealtimeAdminKPIs() {
     const supabase = supabaseRef.current;
 
     const [accountsRes, approvalsRes] = await Promise.all([
-      supabase.from("accounts").select("id, subscription_status, mrr, plan"),
-      supabase.from("hil_confirmations").select("id").eq("status", "pending"),
+      supabase.from("accounts").select("id, subscription_status, mrr, plan") as unknown as Promise<{data: Array<{id: string; subscription_status: string; mrr: number | null}> | null}>,
+      supabase.from("hil_confirmations").select("id").eq("status", "pending") as unknown as Promise<{data: Array<{id: string}> | null}>,
     ]);
 
-    const accounts = accountsRes.data ?? [];
+    const accounts: Array<{ id: string; subscription_status: string; mrr: number | null }> = accountsRes.data ?? [];
     setKpis({
       totalAccounts: accounts.length,
       activeAccounts: accounts.filter((a) => a.subscription_status === "active").length,

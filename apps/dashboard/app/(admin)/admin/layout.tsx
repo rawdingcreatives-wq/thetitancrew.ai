@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Admin Panel Layout
  *
@@ -13,8 +12,8 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard, Users, DollarSign, Bot, HeadphonesIcon,
-  Shield, Activity, Settings, Menu, X, Zap, ChevronRight,
-  LogOut, ArrowLeft, AlertTriangle, TrendingUp,
+  Shield, Menu, ChevronRight,
+  ArrowLeft,
 } from "lucide-react";
 
 // ─── Navigation ─────────────────────────────────────────────
@@ -34,11 +33,21 @@ const ROLE_LABELS: Record<string, string> = {
   viewer: "Viewer",
 };
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+interface AdminLayoutProps {
+  children: React.ReactNode;
+}
+
+interface AdminUserData {
+  id: string;
+  email: string;
+  role: string;
+}
+
+export default function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [admin, setAdmin] = useState<any>(null);
+  const [admin, setAdmin] = useState<AdminUserData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,14 +64,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           .single();
 
         if (!adminUser) { router.replace("/"); return; }
-        setAdmin(adminUser);
+        setAdmin(adminUser as AdminUserData);
       } catch {
         router.replace("/");
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [router]);
 
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
@@ -105,7 +114,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {adminNav.map((item) => {
-          const Icon = item.icon;
+          const Icon = item.icon as React.ComponentType<{ className?: string }>;
           const active = isActive(item.href);
           return (
             <Link

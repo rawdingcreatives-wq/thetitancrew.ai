@@ -71,11 +71,16 @@ cp .env.example .env.local
 ```
 
 ### 3. Run database migrations
-In Supabase SQL Editor, run in order:
+In Supabase SQL Editor, run **all** files in order:
 ```
-infrastructure/supabase/00-phase0-schema.sql
-infrastructure/supabase/01-rls-policies.sql
-infrastructure/supabase/02-phase5-schema.sql
+infrastructure/supabase/00-phase0-schema.sql        # Core tables, enums, indexes
+infrastructure/supabase/01-rls-policies.sql          # Row Level Security policies
+infrastructure/supabase/02-phase5-schema.sql         # Phase 5 extensions
+infrastructure/supabase/03-onboarding-v2-columns.sql # ROI calculator columns
+infrastructure/supabase/03-seed-demo-data.sql        # (Optional) Demo data for dev
+infrastructure/supabase/04-admin-schema.sql          # Admin panel tables
+infrastructure/supabase/05-enable-realtime.sql       # Supabase Realtime subscriptions
+infrastructure/supabase/06-google-calendar-columns.sql # OAuth + owner_phone columns
 ```
 
 ### 4. Start development

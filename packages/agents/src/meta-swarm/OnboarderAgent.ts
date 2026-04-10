@@ -20,10 +20,13 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "../../apps/dashboard/lib/supabase/types";
+import { guardKillSwitch } from "../guardrails/kill-switches";
+import { createLogger } from "../guardrails/logger";
+
+const onboardLog = createLogger("OnboarderAgent");
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-const supabase = createClient<Database>(
+const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
@@ -40,7 +43,7 @@ interface OnboardingContext {
   tradeType?: string;
   teamSize?: string;
   phone?: string;
-  plan?: "basic" | "pro";
+  plan?: "lite" | "growth" | "scale";
   timezone?: string;
   googleCalendarConnected?: boolean;
   quickbooksConnected?: boolean;
@@ -53,14 +56,22 @@ interface OnboardingContext {
 // ─── Agent Configurations by Plan ─────────────────────────
 
 const AGENTS_BY_PLAN = {
-  basic: [
+  lite: [
     "scheduler",
     "customer_comm",
     "finance_invoice",
     "foreman_predictor",
     "parts_inventory",
   ],
-  pro: [
+  growth: [
+    "scheduler",
+    "customer_comm",
+    "finance_invoice",
+    "foreman_predictor",
+    "parts_inventory",
+    "tech_dispatch",
+  ],
+  scale: [
     "scheduler",
     "customer_comm",
     "finance_invoice",
@@ -98,7 +109,7 @@ const tools: Anthropic.Tool[] = [
         tradeType: { type: "string" },
         teamSize: { type: "string" },
         phone: { type: "string" },
-        plan: { type: "string", enum: ["basic", "pro"] },
+        plan: { type: "string", enum: ["lite", "growth", "scale"] },
         timezone: { type: "string" },
         city: { type: "string" },
         state: { type: "string" },
@@ -114,7 +125,7 @@ const tools: Anthropic.Tool[] = [
       type: "object" as const,
       properties: {
         accountId: { type: "string" },
-        plan: { type: "string", enum: ["basic", "pro"] },
+        plan: { type: "string", enum: ["lite", "growth", "scale"] },
         agentTypes: {
           type: "array",
           items: { type: "string" },
@@ -263,6 +274,26 @@ const tools: Anthropic.Tool[] = [
       required: ["accountId", "onboardedAt"],
     },
   },
+  {
+    name: "run_immediate_welcome_briefing",
+    description:
+      "Run an immediate mini-briefing so the owner gets proof-of-value within 60 seconds of deploy. " +
+      "Generates a short welcome summary based on their sample data and sends it via email. " +
+      "This is the Day-1 'aha moment' — do NOT skip this step.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        accountId: { type: "string" },
+        ownerEmail: { type: "string" },
+        ownerName: { type: "string" },
+        businessName: { type: "string" },
+        tradeType: { type: "string" },
+        agentCount: { type: "number" },
+        dashboardUrl: { type: "string" },
+      },
+      required: ["accountId", "ownerEmail", "ownerName"],
+    },
+  },
 ];
 
 // ─── Tool Handlers ────────────────────────────────────────
@@ -301,7 +332,7 @@ async function executeTool(
       } = toolInput as Record<string, string>;
 
       // Find the auth user by email
-      const { data: authUser } = await supabase.auth.admin.getUserByEmail(ownerEmail);
+      const { data: authUser } = await supabase.auth.admin.getUserById(ownerEmail);
       if (!authUser?.user) {
         return { success: false, reason: `Auth user not found for email: ${ownerEmail}` };
       }
@@ -309,8 +340,7 @@ async function executeTool(
       const userId = authUser.user.id;
 
       // Upsert account
-      const { data, error } = await supabase
-        .from("accounts")
+      const { data, error } = await (supabase.from("accounts") as any)
         .upsert(
           {
             owner_user_id: userId,
@@ -319,14 +349,14 @@ async function executeTool(
             trade_type: tradeType,
             team_size: teamSize,
             phone,
-            plan: plan as "basic" | "pro",
+            plan: plan as "lite" | "growth" | "scale",
             subscription_status: "active",
             stripe_customer_id: stripeCustomerId,
             timezone: timezone ?? "America/Chicago",
             city,
             state,
             health_score: 100,
-            mrr: plan === "pro" ? 799 : 399,
+            mrr: plan === "growth" ? 799 : plan === "scale" ? 1299 : 399,
             created_at: new Date().toISOString(),
           },
           { onConflict: "owner_user_id" }
@@ -341,7 +371,7 @@ async function executeTool(
     case "create_agent_instances": {
       const { accountId, plan, agentTypes } = toolInput as {
         accountId: string;
-        plan: "basic" | "pro";
+        plan: "lite" | "growth" | "scale";
         agentTypes?: string[];
       };
 
@@ -355,13 +385,12 @@ async function executeTool(
         created_at: new Date().toISOString(),
       }));
 
-      const { data, error } = await supabase
-        .from("agent_instances")
+      const { data, error } = await (supabase.from("agent_instances") as any)
         .upsert(inserts, { onConflict: "account_id,agent_type" })
         .select("id, agent_type");
 
-      if (error) return { success: false, error: error.message };
-      return { success: true, created: data?.length ?? 0, agents: data?.map((a) => a.agent_type) };
+      if (error) return { success: false, error: (error as any).message };
+      return { success: true, created: (data as any)?.length ?? 0, agents: (data as any)?.map((a: any) => (a as any).agent_type) };
     }
 
     case "seed_agent_memory": {
@@ -386,8 +415,8 @@ async function executeTool(
         }),
       });
 
-      const embedData = await embedResp.json();
-      const embedding = embedData.data?.[0]?.embedding;
+      const embedData = (await embedResp.json()) as any;
+      const embedding = (embedData as any).data?.[0]?.embedding;
 
       if (!embedding) return { seeded: false, reason: "Embedding failed" };
 
@@ -408,7 +437,7 @@ async function executeTool(
     case "send_welcome_sms": {
       const { phone, ownerName, businessName, plan, tradeType, dashboardUrl } = toolInput as Record<string, string>;
       const firstName = ownerName.split(" ")[0];
-      const agentCount = plan === "pro" ? 6 : 5;
+      const agentCount = plan === "growth" || plan === "scale" ? 6 : 5;
 
       const message = `🎉 Welcome to TitanCrew, ${firstName}! Your ${agentCount}-agent AI crew for ${businessName ?? `your ${tradeType} business`} is being set up right now. Dashboard: ${dashboardUrl ?? "https://app.titancrew.ai"} — Reply STOP to opt out`;
 
@@ -440,7 +469,7 @@ async function executeTool(
 
       const firstName = ownerName.split(" ")[0];
       const appUrl = dashboardUrl ?? "https://app.titancrew.ai";
-      const agents = agentList ?? AGENTS_BY_PLAN[plan as "basic" | "pro" ?? "basic"];
+      const agents = agentList ?? AGENTS_BY_PLAN[plan as "lite" | "growth" | "scale" ?? "lite"];
 
       const agentListHtml = agents
         .map(
@@ -533,7 +562,7 @@ async function executeTool(
             recurring: true,
             cronExpression: "0 6 * * *",
           }),
-        }).catch(console.error);
+        }).catch((err) => onboardLog.error({ event: "first_crew_run_scheduled_failed", err: String(err) }, "Failed to schedule first crew run via n8n webhook"));
       }
 
       return {
@@ -552,8 +581,7 @@ async function executeTool(
       };
 
       // Sample customer
-      const { data: customer } = await supabase
-        .from("trade_customers")
+      const { data: customer } = await (supabase.from("trade_customers") as any)
         .insert({
           account_id: accountId,
           name: "John Anderson",
@@ -621,12 +649,18 @@ async function executeTool(
       };
 
       const now = new Date().toISOString();
-      const { error } = await supabase
-        .from("accounts")
+      // Write the same fields the dashboard's /api/account/complete-onboarding writes:
+      //   crew_deployed_at  — the single source of truth for "deployment succeeded"
+      //   onboard_step = 9  — gates dashboard access and onboarding checklist
+      // This makes OnboarderAgent a genuine backup writer for the case where the
+      // dashboard's complete-onboarding call failed but the agent job still ran.
+      const { error } = await (supabase.from("accounts") as any)
         .update({
-          onboarded_at: now,
+          crew_deployed_at:    now,
+          onboard_step:        9,
+          onboarded_at:        now,
           subscription_status: "active",
-          health_score: 100,
+          health_score:        100,
         })
         .eq("id", accountId);
 
@@ -670,10 +704,95 @@ async function executeTool(
             ownerEmail,
             ownerPhone,
           }),
-        }).catch(console.error);
+        }).catch((err) => onboardLog.error({ event: "day_7_checkin_scheduled_failed", err: String(err) }, "Failed to schedule day-7 check-in via n8n webhook"));
       }
 
       return { scheduled: true, checkinDate: checkinDate.toISOString() };
+    }
+
+    // ── Day-1 "aha moment": immediate welcome briefing ──────────
+    case "run_immediate_welcome_briefing": {
+      const { accountId, ownerEmail, ownerName, businessName, tradeType, agentCount, dashboardUrl } =
+        toolInput as Record<string, string | number>;
+
+      const firstName = (ownerName as string).split(" ")[0];
+      const appUrl = (dashboardUrl as string) ?? "https://app.titancrew.ai";
+      const agents = (agentCount as number) ?? 5;
+
+      // Gather the sample data we just created to make the briefing real
+      const { data: sampleJobs } = await (supabase.from("jobs") as any)
+        .select("title, status, amount")
+        .eq("account_id", accountId)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      const jobSummary = (sampleJobs ?? [])
+        .map((j: { title: string; status: string; amount: number }) =>
+          `<tr><td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;">${j.title}</td><td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;">${j.status}</td><td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;text-align:right;">$${j.amount}</td></tr>`
+        )
+        .join("");
+
+      const now = new Date();
+      const briefingHtml = `
+        <div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #1A2744; padding: 24px 32px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: #FF6B00; margin: 0; font-size: 22px;">⚡ Your First TitanCrew Briefing</h1>
+            <p style="color: #9FADC9; margin: 4px 0 0; font-size: 14px;">${now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>
+          </div>
+          <div style="background: white; padding: 24px 32px; border-radius: 0 0 12px 12px; border: 1px solid #E2E8F0;">
+            <p style="font-size: 16px; color: #1A2744;">Hey ${firstName}! 👋</p>
+            <p style="color: #374151;">Your <strong>${agents}-agent AI crew</strong> is now live for <strong>${businessName ?? `your ${tradeType} business`}</strong>. Here's what your crew is already tracking:</p>
+
+            ${jobSummary ? `
+            <h3 style="color: #1A2744; margin-top: 20px; font-size: 15px;">📋 Jobs on Your Board</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+              <thead><tr style="background:#F8FAFC;"><th style="padding:8px 12px;text-align:left;">Job</th><th style="padding:8px 12px;text-align:left;">Status</th><th style="padding:8px 12px;text-align:right;">Amount</th></tr></thead>
+              <tbody>${jobSummary}</tbody>
+            </table>` : ""}
+
+            <div style="background: #FFF7ED; border-left: 4px solid #FF6B00; padding: 16px; margin: 20px 0; border-radius: 4px;">
+              <strong style="color: #1A2744;">🔮 What happens next:</strong>
+              <p style="color: #374151; margin: 8px 0 0;">Tomorrow at 6:00 AM, your crew runs its first full morning sweep — analyzing jobs, invoices, customer follow-ups, and parts inventory. You'll receive a detailed briefing just like this one, but with real operational intelligence.</p>
+            </div>
+
+            <div style="text-align: center; margin: 24px 0 16px;">
+              <a href="${appUrl}" style="display: inline-block; background: #FF6B00; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: 700;">Open Mission Control →</a>
+            </div>
+          </div>
+        </div>`;
+
+      // Send via SendGrid
+      const sendgridKey = process.env.SENDGRID_API_KEY;
+      if (!sendgridKey) {
+        onboardLog.warn({ event: "welcome_briefing_skipped", reason: "no_sendgrid" }, "SendGrid not configured — welcome briefing not sent");
+        return { sent: false, reason: "SENDGRID_API_KEY not set" };
+      }
+
+      // Kill switch check
+      if (guardKillSwitch("KILL_OUTBOUND_EMAIL", { event: "welcome_briefing", accountId })) {
+        return { sent: false, reason: "Kill switch KILL_OUTBOUND_EMAIL active" };
+      }
+
+      const emailResp = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sendgridKey}`,
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: ownerEmail as string, name: ownerName as string }] }],
+          from: { email: "crew@titancrew.ai", name: "TitanCrew" },
+          subject: `⚡ ${firstName}, your first crew briefing is here`,
+          content: [{ type: "text/html", value: briefingHtml }],
+        }),
+      });
+
+      onboardLog.info(
+        { event: "welcome_briefing_sent", accountId, status: emailResp.status },
+        `Welcome briefing email sent to ${(ownerEmail as string).slice(0, 3)}***`
+      );
+
+      return { sent: emailResp.ok, status: emailResp.status };
     }
 
     default:
@@ -684,12 +803,17 @@ async function executeTool(
 // ─── SMS Helper ───────────────────────────────────────────
 
 async function sendSMS(phone: string, message: string): Promise<Record<string, unknown>> {
+  // Kill switch: block all outbound SMS
+  if (guardKillSwitch("KILL_OUTBOUND_SMS", { event: "onboarder_sms", phone: phone.slice(-4) })) {
+    return { sent: false, reason: "Kill switch KILL_OUTBOUND_SMS active" };
+  }
+
   const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
   const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
   const twilioFrom = process.env.TWILIO_FROM_NUMBER;
 
   if (!twilioAccountSid || !twilioAuthToken || !twilioFrom) {
-    console.warn("[Onboarder] Twilio not configured — SMS not sent");
+    onboardLog.warn({ event: "twilio_not_configured" }, "Twilio not configured — SMS not sent");
     return { sent: false, reason: "Twilio not configured" };
   }
 
@@ -705,8 +829,8 @@ async function sendSMS(phone: string, message: string): Promise<Record<string, u
       body: formData.toString(),
     }
   );
-  const data = await resp.json();
-  return { sent: resp.ok, sid: data.sid };
+  const data = (await resp.json()) as any;
+  return { sent: resp.ok, sid: (data as any).sid };
 }
 
 // ─── Main Agent Loop ──────────────────────────────────────
@@ -716,6 +840,7 @@ export async function runOnboarderAgent(ctx: OnboardingContext): Promise<{
   accountId?: string;
   agentsCreated: number;
   onboardedAt?: string;
+  welcomeBriefingSent: boolean;
 }> {
   const systemPrompt = `You are OnboarderAgent — TitanCrew's automated customer onboarding engine.
 
@@ -735,12 +860,13 @@ SEQUENCE (execute in order):
 8. schedule_first_crew_run — 6:00 AM tomorrow in their timezone
 9. mark_onboarding_complete — update DB, fire audit log
 10. send_crew_live_notification — THE celebration SMS (make it exciting!)
-11. schedule_day7_checkin — queue the 7-day engagement check
+11. run_immediate_welcome_briefing — CRITICAL: send an instant briefing email so the owner gets proof-of-value NOW, not tomorrow
+12. schedule_day7_checkin — queue the 7-day engagement check
 
 RULES:
 - If any step fails, log the error and continue — never abort the whole flow
 - Skip SMS steps if no phone number is provided
-- Basic plan = 5 agents, Pro plan = 6 agents (includes TechDispatchAgent)
+- Lite plan = 5 agents, Growth/Scale plans = 6 agents (includes TechDispatchAgent)
 - The welcome messages MUST feel personal and human, not like a mass email
 - Always complete mark_onboarding_complete even if some steps were skipped
 
@@ -749,13 +875,14 @@ Be efficient. Execute each step, handle any errors gracefully, and make this cus
   const messages: Anthropic.MessageParam[] = [
     {
       role: "user",
-      content: `Onboard this new customer. Stripe session: ${ctx.stripeSessionId ?? "N/A"}. Email: ${ctx.ownerEmail}. Plan: ${ctx.plan ?? "basic"}. Business: ${ctx.businessName ?? "unknown"}. Trade: ${ctx.tradeType ?? "unknown"}. Phone: ${ctx.phone ?? "not provided"}. Proceed with full onboarding sequence.`,
+      content: `Onboard this new customer. Stripe session: ${ctx.stripeSessionId ?? "N/A"}. Email: ${ctx.ownerEmail}. Plan: ${ctx.plan ?? "lite"}. Business: ${ctx.businessName ?? "unknown"}. Trade: ${ctx.tradeType ?? "unknown"}. Phone: ${ctx.phone ?? "not provided"}. Proceed with full onboarding sequence.`,
     },
   ];
 
   let accountId: string | undefined;
   let agentsCreated = 0;
   let onboardedAt: string | undefined;
+  let welcomeBriefingSent = false;
 
   for (let turn = 0; turn < 25; turn++) {
     const response = await anthropic.messages.create({
@@ -792,6 +919,9 @@ Be efficient. Execute each step, handle any errors gracefully, and make this cus
         if (block.name === "mark_onboarding_complete" && r.onboardedAt) {
           onboardedAt = r.onboardedAt as string;
         }
+        if (block.name === "run_immediate_welcome_briefing") {
+          welcomeBriefingSent = !!r.sent;
+        }
 
         toolResults.push({
           type: "tool_result",
@@ -804,10 +934,44 @@ Be efficient. Execute each step, handle any errors gracefully, and make this cus
     }
   }
 
+  // ── Deterministic Day-1 "aha moment" ─────────────────────────
+  // If the model loop completed without calling run_immediate_welcome_briefing,
+  // fire it imperatively. The owner must get immediate proof-of-value.
+  let welcomeBriefingResult: Record<string, unknown> | undefined;
+  if (!welcomeBriefingSent && (accountId ?? ctx.accountId) && ctx.ownerEmail) {
+    const resolvedAccountId = accountId ?? ctx.accountId ?? "";
+    onboardLog.info(
+      { event: "welcome_briefing_deterministic", accountId: resolvedAccountId },
+      "Model did not call run_immediate_welcome_briefing — invoking deterministically"
+    );
+    try {
+      welcomeBriefingResult = await executeTool("run_immediate_welcome_briefing", {
+        accountId:    resolvedAccountId,
+        ownerEmail:   ctx.ownerEmail,
+        ownerName:    ctx.ownerName ?? "there",
+        businessName: ctx.businessName,
+        tradeType:    ctx.tradeType,
+        agentCount:   agentsCreated || (ctx.plan === "growth" || ctx.plan === "scale" ? 6 : 5),
+      }) as Record<string, unknown>;
+      welcomeBriefingSent = !!welcomeBriefingResult?.sent;
+    } catch (err) {
+      onboardLog.error(
+        { event: "welcome_briefing_deterministic_failed", accountId: resolvedAccountId, err: String(err) },
+        "Deterministic welcome briefing failed"
+      );
+    }
+  } else if (!welcomeBriefingSent && !ctx.ownerEmail) {
+    onboardLog.warn(
+      { event: "welcome_briefing_skipped", reason: "no_email" },
+      "Welcome briefing skipped — no ownerEmail in context"
+    );
+  }
+
   return {
     success: !!onboardedAt,
     accountId,
     agentsCreated,
     onboardedAt,
+    welcomeBriefingSent,
   };
 }

@@ -17,6 +17,9 @@ import { GoogleCalendarAdapter, type JobEvent, type AvailabilityQuery } from "./
 import { QuickBooksAdapter, type QBOInvoice, type QBOCustomer } from "./QuickBooksAdapter";
 import { SupplierRouter, type PartSearchQuery, type PurchaseOrderRequest } from "./SupplierAdapters";
 import { createClient } from "@supabase/supabase-js";
+import { createLogger } from "../../guardrails/logger";
+
+const integLog = createLogger("IntegrationOrchestrator");
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -68,7 +71,7 @@ function recordFailure(integration: string): void {
   cb.lastFailure = Date.now();
   if (cb.failures >= CIRCUIT_FAILURE_THRESHOLD) {
     cb.state = "open";
-    console.warn(`[IntegrationOrchestrator] Circuit breaker OPENED for ${integration} after ${cb.failures} failures`);
+    integLog.warn({ event: "circuit_breaker_opened", integration, failures: cb.failures }, `Circuit breaker OPENED for ${integration} after ${cb.failures} failures`);
   }
 }
 
@@ -107,15 +110,16 @@ async function withRetryAndCircuitBreaker<T>(
       const jitter = baseDelay * 0.25 * (Math.random() * 2 - 1);
       const delay = Math.max(500, baseDelay + jitter);
 
-      console.warn(
-        `[IntegrationOrchestrator] ${integration} attempt ${attempt}/${maxAttempts} failed: ${lastError.message}. Retrying in ${Math.round(delay)}ms`
+      integLog.warn(
+        { event: "retry", integration, attempt, maxAttempts, delayMs: Math.round(delay) },
+        `${integration} attempt ${attempt}/${maxAttempts} failed: ${lastError.message}. Retrying in ${Math.round(delay)}ms`
       );
       await new Promise((r) => setTimeout(r, delay));
     }
   }
 
   if (fallback) {
-    console.warn(`[IntegrationOrchestrator] ${integration} all retries exhausted — using fallback`);
+    integLog.warn({ event: "fallback_used", integration }, `${integration} all retries exhausted — using fallback`);
     return fallback();
   }
 
@@ -141,7 +145,7 @@ async function getIntegrationStatus(accountId: string): Promise<IntegrationStatu
     return cached;
   }
 
-  const { data: account } = await supabase
+  const { data: account } = await (supabase as any)
     .from("accounts")
     .select("google_calendar_token, qbo_access_token")
     .eq("id", accountId)

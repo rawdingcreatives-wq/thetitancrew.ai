@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · QuickActions
  * One-tap shortcuts for common owner actions from the dashboard.
@@ -38,7 +37,7 @@ export function QuickActions({ accountId }: QuickActionsProps) {
       } else {
         showToast("Could not reach the AI crew. Try again in a moment.");
       }
-    } catch (err) {
+    } catch {
       showToast("Could not reach the AI crew. Check your connection.");
     } finally {
       setTimeout(() => setTriggering(null), 1500);

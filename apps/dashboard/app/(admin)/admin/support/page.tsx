@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Admin Support Tickets
  *
@@ -10,9 +9,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  HeadphonesIcon, Search, Filter, Clock, CheckCircle,
-  AlertTriangle, MessageSquare, User, X, Send,
-  ChevronDown, ArrowUpDown, Tag,
+  Search, X, Send,
 } from "lucide-react";
 
 interface Ticket {
@@ -94,7 +91,7 @@ export default function AdminSupportPage() {
 
   const handleUpdateStatus = async (ticketId: string, status: string) => {
     const supabase = createClient();
-    const updates: any = { status };
+    const updates: Record<string, string> = { status };
     if (status === "resolved") updates.resolved_at = new Date().toISOString();
     await (supabase.from("support_tickets") as any)
       .update(updates)
@@ -114,7 +111,7 @@ export default function AdminSupportPage() {
     // Get admin user id
     const { data: adminUser } = await (supabase.from("admin_users") as any)
       .select("id")
-      .eq("user_id", user?.id)
+      .eq("user_id", user?.id ?? "")
       .single();
 
     await (supabase.from("support_ticket_comments") as any).insert({

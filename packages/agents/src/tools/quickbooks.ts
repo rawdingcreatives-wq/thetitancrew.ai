@@ -85,7 +85,7 @@ export class QuickBooksTool {
         qbPayload
       );
 
-      const inv = response.Invoice;
+      const inv = (response as any).Invoice;
       const total = inv.TotalAmt ?? 0;
 
       // Optionally send invoice email
@@ -114,7 +114,7 @@ export class QuickBooksTool {
 
     try {
       const response = await this.qbFetch(tokens, `/invoice/${invoiceId}`, "GET");
-      const inv = response.Invoice;
+      const inv = (response as any).Invoice;
 
       const totalAmt = inv.TotalAmt ?? 0;
       const balance = inv.Balance ?? 0;
@@ -155,7 +155,7 @@ export class QuickBooksTool {
         "GET"
       );
 
-      return (response.QueryResponse?.Invoice ?? []).map((inv: Record<string, unknown>) => ({
+      return ((response as any).QueryResponse?.Invoice ?? []).map((inv: Record<string, unknown>) => ({
         invoiceId: inv.Id as string,
         status: "overdue" as const,
         balance: inv.Balance as number,
@@ -191,7 +191,7 @@ export class QuickBooksTool {
 
     try {
       const response = await this.qbFetch(tokens, `/customer`, "POST", payload);
-      return { success: true, qbCustomerId: response.Customer?.Id };
+      return { success: true, qbCustomerId: (response as any).Customer?.Id };
     } catch (err) {
       return { success: false, error: String(err) };
     }
@@ -210,7 +210,7 @@ export class QuickBooksTool {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("accounts")
       .select("integrations")
       .eq("id", this.accountId)

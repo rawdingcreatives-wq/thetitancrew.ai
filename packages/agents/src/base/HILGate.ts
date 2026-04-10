@@ -7,6 +7,10 @@
 import { createClient } from "@supabase/supabase-js";
 import twilio from "twilio";
 import type { Database } from "../../shared/types/database.types";
+import { createLogger } from "../guardrails/logger";
+import { guardKillSwitch } from "../guardrails/kill-switches";
+
+const log = createLogger("HILGate");
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 
@@ -57,17 +61,17 @@ export class HILGate {
     request: HILRequest,
     timeoutMs = HIL_TIMEOUT_MS
   ): Promise<boolean> {
-    // Fetch owner phone
+    // Fetch owner phone — HIL is sacred: NEVER auto-approve without human confirmation
     const ownerPhone = await this.getOwnerPhone();
     if (!ownerPhone) {
-      console.warn(`[HILGate] No owner phone for account ${this.accountId} — auto-approving low-risk`);
-      return request.riskLevel === "low";
+      log.error({ event: "no_owner_phone", accountId: this.accountId, actionType: request.actionType }, "No owner phone — BLOCKING action (HIL is sacred)");
+      return false;
     }
 
     // Create confirmation record
     const confirmationId = crypto.randomUUID();
-    const { data: record, error } = await this.supabase
-      .from("hil_confirmations")
+    const { data: record, error } = await (this.supabase
+      .from("hil_confirmations") as any)
       .insert({
         id: confirmationId,
         account_id: this.accountId,
@@ -75,7 +79,7 @@ export class HILGate {
         risk_level: request.riskLevel,
         description: request.description,
         amount: request.amount,
-        payload: request.payload as never,
+        payload: request.payload,
         sent_via: "sms",
         sent_to: ownerPhone,
         status: "pending",
@@ -85,7 +89,7 @@ export class HILGate {
       .single();
 
     if (error || !record) {
-      console.error("[HILGate] Failed to create HIL record:", error);
+      log.error({ event: "record_create_failed", accountId: this.accountId, actionType: request.actionType }, "Failed to create HIL record", error);
       return false;
     }
 
@@ -109,7 +113,12 @@ export class HILGate {
       `Expires in 1 hour. Reply STOP to opt out.`,
     ].join("\n");
 
-    // Send SMS
+    // Send SMS — guarded by kill switch
+    if (guardKillSwitch("KILL_OUTBOUND_SMS", { accountId: this.accountId, confirmationId, actionType: request.actionType })) {
+      log.warn({ event: "sms_blocked_by_kill_switch", accountId: this.accountId, confirmationId }, "SMS kill switch active — HIL SMS not sent, BLOCKING action");
+      return false;
+    }
+
     try {
       const msg = await this.twilioClient.messages.create({
         body: smsBody,
@@ -117,17 +126,16 @@ export class HILGate {
         to: ownerPhone,
       });
 
-      await this.supabase
-        .from("hil_confirmations")
+      log.info({ event: "hil_sms_sent", accountId: this.accountId, confirmationId, twilioMessageSid: msg.sid }, `HIL SMS sent for ${request.actionType}`);
+
+      await (this.supabase
+        .from("hil_confirmations") as any)
         .update({ twilio_sid: msg.sid })
         .eq("id", confirmationId);
     } catch (twilioError) {
-      console.error("[HILGate] SMS send failed:", twilioError);
-      // If we can't send SMS, block high-risk actions
-      if (request.riskLevel === "high" || request.riskLevel === "critical") {
-        return false;
-      }
-      return true; // Auto-approve medium/low if SMS fails
+      log.error({ event: "sms_send_failed", accountId: this.accountId, confirmationId }, "HIL SMS send failed — BLOCKING action", twilioError);
+      // HIL is sacred: if we can't reach the owner, BLOCK all actions regardless of risk
+      return false;
     }
 
     // Poll for response
@@ -147,8 +155,8 @@ export class HILGate {
     while (Date.now() < deadline) {
       await this.sleep(POLL_INTERVAL_MS);
 
-      const { data } = await this.supabase
-        .from("hil_confirmations")
+      const { data } = await (this.supabase
+        .from("hil_confirmations") as any)
         .select("status")
         .eq("response_token", responseToken)
         .single();
@@ -161,8 +169,8 @@ export class HILGate {
     }
 
     // Timeout — mark as timed_out and return false (safe default)
-    await this.supabase
-      .from("hil_confirmations")
+    await (this.supabase
+      .from("hil_confirmations") as any)
       .update({ status: "timed_out" })
       .eq("response_token", responseToken);
 
@@ -179,8 +187,8 @@ export class HILGate {
     action: "approve" | "reject",
     rejectionReason?: string
   ): Promise<{ success: boolean; message: string }> {
-    const { data, error } = await supabase
-      .from("hil_confirmations")
+    const { data, error } = await (supabase
+      .from("hil_confirmations") as any)
       .update({
         status: action === "approve" ? "approved" : "rejected",
         responded_at: new Date().toISOString(),
@@ -204,8 +212,8 @@ export class HILGate {
   }
 
   private async getOwnerPhone(): Promise<string | null> {
-    const { data } = await this.supabase
-      .from("accounts")
+    const { data } = await (this.supabase
+      .from("accounts") as any)
       .select("phone")
       .eq("id", this.accountId)
       .single();

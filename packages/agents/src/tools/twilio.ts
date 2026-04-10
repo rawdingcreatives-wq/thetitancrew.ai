@@ -7,7 +7,11 @@
 import twilio from "twilio";
 import { createClient } from "@supabase/supabase-js";
 import { TCPAGuard } from "../guardrails/TCPAGuard";
+import { guardKillSwitch } from "../guardrails/kill-switches";
+import { createLogger } from "../guardrails/logger";
 import type { Database } from "../../shared/types/database.types";
+
+const log = createLogger("TwilioTool");
 
 export interface SMSResult {
   success: boolean;
@@ -57,6 +61,15 @@ export class TwilioTool {
     agentRunId?: string;
   }): Promise<SMSResult> {
     const messageType = params.messageType ?? "transactional";
+
+    // Kill switch — blocks ALL outbound SMS when active
+    if (guardKillSwitch("KILL_OUTBOUND_SMS", { accountId: this.accountId, to: params.to, messageType })) {
+      log.warn(
+        { event: "sms_blocked_kill_switch", accountId: this.accountId, to: params.to },
+        "SMS blocked by KILL_OUTBOUND_SMS kill switch"
+      );
+      return { success: false, blocked: true, blockReason: "Kill switch KILL_OUTBOUND_SMS is active" };
+    }
 
     // TCPA pre-flight
     const tcpaCheck = await this.tcpaGuard.check(
@@ -229,9 +242,9 @@ export class TwilioTool {
         external_id: params.externalId,
         ai_generated: true,
         cost_usd: 0.0075, // Twilio SMS ~$0.0075/msg
-      });
+      } as any);
     } catch (err) {
-      console.error("[TwilioTool] Failed to log comm:", err);
+      log.error({ event: "comm_log_failed", accountId: this.accountId, err: String(err) }, "Failed to log comm");
     }
   }
 }

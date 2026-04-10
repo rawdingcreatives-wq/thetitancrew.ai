@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Agent Toggle Route
  * POST /api/agents/toggle
@@ -10,6 +9,24 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("agent-toggle");
+
+interface AccountData {
+  id: string;
+  plan?: string;
+}
+
+interface AgentInstanceData {
+  id: string;
+  account_id: string;
+  agent_type: string;
+}
+
+interface UpsertedData {
+  id: string;
+}
 
 const CUSTOMER_AGENT_TYPES = [
   "foreman_predictor",
@@ -36,30 +53,32 @@ export async function POST(req: NextRequest) {
     const serviceSupabase = createServiceClient();
 
     // Get the account for this user
-    const { data: account, error: accErr } = await serviceSupabase
+    const { data: account, error: accErr } = await (serviceSupabase as any)
       .from("accounts")
       .select("id, plan")
       .eq("owner_user_id", user.id)
       .single();
 
-    if (accErr || !account) {
+    const typedAccount = account as AccountData | null;
+    if (accErr || !typedAccount) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
     if (body.agentId) {
       // Toggle by agent instance ID — verify ownership first
-      const { data: instance, error: instErr } = await serviceSupabase
+      const { data: instance, error: instErr } = await (serviceSupabase as any)
         .from("agent_instances")
         .select("id, account_id, agent_type")
         .eq("id", body.agentId)
-        .eq("account_id", account.id)
+        .eq("account_id", typedAccount.id)
         .single();
 
-      if (instErr || !instance) {
+      const typedInstance = instance as AgentInstanceData | null;
+      if (instErr || !typedInstance) {
         return NextResponse.json({ error: "Agent instance not found" }, { status: 404 });
       }
 
-      const { error: updateErr } = await serviceSupabase
+      const { error: updateErr } = await (serviceSupabase as any)
         .from("agent_instances")
         .update({
           is_enabled: body.enabled,
@@ -69,7 +88,7 @@ export async function POST(req: NextRequest) {
         .eq("id", body.agentId);
 
       if (updateErr) {
-        console.error("[Agent Toggle] Update error:", updateErr);
+        log.error({ event: "update_error", err: String(updateErr) }, "Failed to update agent");
         return NextResponse.json({ error: "Failed to update agent" }, { status: 500 });
       }
 
@@ -81,16 +100,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "agentId or agentType required" }, { status: 400 });
     }
 
-    if (!CUSTOMER_AGENT_TYPES.includes(body.agentType as any)) {
+    if (!CUSTOMER_AGENT_TYPES.includes(body.agentType as typeof CUSTOMER_AGENT_TYPES[number])) {
       return NextResponse.json({ error: "Invalid agent type" }, { status: 400 });
     }
 
     // Upsert the agent instance
-    const { data: upserted, error: upsertErr } = await serviceSupabase
+    const { data: upserted, error: upsertErr } = await (serviceSupabase as any)
       .from("agent_instances")
       .upsert(
         {
-          account_id: account.id,
+          account_id: typedAccount.id,
           agent_type: body.agentType,
           is_enabled: body.enabled,
           status: body.enabled ? "idle" : "disabled",
@@ -102,14 +121,15 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (upsertErr) {
-      console.error("[Agent Toggle] Upsert error:", upsertErr);
+      log.error({ event: "upsert_error", err: String(upsertErr) }, "Failed to upsert agent");
       return NextResponse.json({ error: "Failed to upsert agent" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, agentId: upserted?.id, enabled: body.enabled });
+    const upsertedTyped = upserted as UpsertedData | null;
+    return NextResponse.json({ success: true, agentId: upsertedTyped?.id, enabled: body.enabled });
 
   } catch (err) {
-    console.error("[Agent Toggle] Unhandled error:", err);
+    log.error({ event: "unhandled_error", err: String(err) }, "Unhandled error");
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

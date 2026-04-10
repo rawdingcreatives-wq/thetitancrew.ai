@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · A2PRegistrationPanel
  * Twilio A2P 10DLC SMS registration status and setup guide.
@@ -12,10 +11,10 @@ interface A2PRegistrationPanelProps {
   accountId: string;
   isRegistered: boolean;
   phoneNumber?: string;
-  tradeType?: string;
+  _tradeType?: string;
 }
 
-const TRADE_DESCRIPTIONS: Record<string, string> = {
+const _TRADE_DESCRIPTIONS: Record<string, string> = {
   plumbing: "Plumbing service appointment reminders and follow-ups",
   electrical: "Electrical contractor scheduling and job status updates",
   hvac: "HVAC service notifications and maintenance reminders",
@@ -24,7 +23,7 @@ const TRADE_DESCRIPTIONS: Record<string, string> = {
 };
 
 export function A2PRegistrationPanel({
-  accountId, isRegistered, phoneNumber, tradeType,
+  accountId, isRegistered, phoneNumber, _tradeType,
 }: A2PRegistrationPanelProps) {
   const [expanded, setExpanded] = useState(!isRegistered);
 

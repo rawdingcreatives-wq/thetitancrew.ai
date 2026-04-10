@@ -126,7 +126,7 @@ class FergusonClient {
     });
 
     if (!resp.ok) throw new Error(`Ferguson API ${resp.status}: ${await resp.text()}`);
-    return resp.json();
+    return resp.json() as Promise<T>;
   }
 
   async searchParts(query: string, category?: string, maxResults = 10): Promise<PartResult[]> {
@@ -265,7 +265,7 @@ class GraingerClient {
     });
 
     if (!resp.ok) throw new Error(`Grainger API ${resp.status}: ${await resp.text()}`);
-    return resp.json();
+    return resp.json() as Promise<T>;
   }
 
   async searchParts(query: string, category?: string, maxResults = 10): Promise<PartResult[]> {
@@ -388,7 +388,7 @@ export class SupplierRouter {
   }
 
   private initForAccount(accountId: string) {
-    this.auditLogger = new AuditLogger(supabase, accountId);
+    this.auditLogger = new AuditLogger(supabase);
     this.hilGate = new HILGate(supabase, accountId);
   }
 
@@ -418,8 +418,8 @@ export class SupplierRouter {
 
     // Parallel search across both suppliers
     const [fergusonResults, graingerResults] = await Promise.allSettled([
-      this.withRetry(() => this.ferguson.searchParts(query.query, query.category, query.maxResults ?? 5), "Ferguson search"),
-      this.withRetry(() => this.grainger.searchParts(query.query, query.category, query.maxResults ?? 5), "Grainger search"),
+      this.withRetry(() => this.ferguson.searchParts(query.query, query.category, (query.maxResults as any) ?? 5), "Ferguson search"),
+      this.withRetry(() => this.grainger.searchParts(query.query, query.category, (query.maxResults as any) ?? 5), "Grainger search"),
     ]);
 
     const fergusonItems = fergusonResults.status === "fulfilled" ? fergusonResults.value : [];
@@ -437,8 +437,10 @@ export class SupplierRouter {
       : null;
 
     await this.auditLogger.log({
-      eventType: "supplier.parts_searched",
-      details: {
+      accountId: query.accountId,
+      action: "supplier.parts_searched",
+      entityType: "supplier_search",
+      metadata: {
         query: query.query,
         fergusonCount: fergusonItems.length,
         graingerCount: graingerItems.length,
@@ -466,7 +468,7 @@ export class SupplierRouter {
     );
 
     // Liability check
-    const liabilityCheck = this.liabilityFilter.check({
+    const liabilityCheck = this.liabilityFilter.check("supplier_purchase_order", {
       action: "supplier_purchase_order",
       estimatedValue: totalAmount,
       details: { jobId: request.jobId, itemCount: request.items.length },
@@ -480,10 +482,12 @@ export class SupplierRouter {
         .join(", ");
 
       const approved = await this.hilGate.requestConfirmation({
+        accountId: request.accountId,
         actionType: "supplier_purchase_order",
+        riskLevel: "medium",
         description: `Purchase order: ${itemsSummary} — Total: $${totalAmount.toFixed(2)} from ${request.items[0]?.partResult.supplier}${request.jobId ? ` — Job: ${request.jobId}` : ""}`,
-        estimatedValue: totalAmount,
-        metadata: { jobId: request.jobId, supplier: request.items[0]?.partResult.supplier },
+        amount: totalAmount,
+        payload: { jobId: request.jobId, supplier: request.items[0]?.partResult.supplier },
       });
       if (!approved) throw new Error("HIL: Purchase order rejected by owner");
     }
@@ -529,7 +533,7 @@ export class SupplierRouter {
       createdAt: new Date().toISOString(),
     };
 
-    const { data: savedPO } = await supabase
+    const { data: savedPO } = await (supabase as any)
       .from("purchase_orders")
       .insert({
         account_id: request.accountId,
@@ -541,7 +545,7 @@ export class SupplierRouter {
         total_amount: totalAmount,
         status: "confirmed",
         estimated_delivery: estimatedDelivery,
-        items: request.items as never,
+        items: request.items as any,
         notes: request.notes,
         created_at: new Date().toISOString(),
       })
@@ -549,8 +553,11 @@ export class SupplierRouter {
       .single();
 
     await this.auditLogger.log({
-      eventType: "supplier.purchase_order_created",
-      details: {
+      accountId: request.accountId,
+      action: "supplier.purchase_order_created",
+      entityType: "purchase_order",
+      entityId: savedPO?.id,
+      metadata: {
         poNumber,
         supplier: primarySupplier,
         totalAmount,
@@ -566,7 +573,7 @@ export class SupplierRouter {
    * Track order status
    */
   async getOrderStatus(poId: string, accountId: string): Promise<OrderStatus | null> {
-    const { data: po } = await supabase
+    const { data: po } = await (supabase as any)
       .from("purchase_orders")
       .select("external_order_id, supplier, status")
       .eq("id", poId)
@@ -575,8 +582,8 @@ export class SupplierRouter {
 
     if (!po?.external_order_id) return null;
 
-    const client = po.supplier === "ferguson" ? this.ferguson : this.grainger;
-    return this.withRetry(() => client.getOrderStatus(po.external_order_id!), "get order status");
+    const client = (po.supplier === "ferguson" ? this.ferguson : this.grainger) as FergusonClient | GraingerClient;
+    return this.withRetry(() => (client as any).getOrderStatus(po.external_order_id!), "get order status");
   }
 
   /**
@@ -610,11 +617,10 @@ export class SupplierRouter {
       suggestions: PartResult[];
     }>;
   }> {
-    const { data: lowStockParts } = await supabase
+    const { data: lowStockParts } = await (supabase as any)
       .from("parts")
       .select("id, name, description, quantity_on_hand, reorder_point, preferred_supplier, unit_cost")
       .eq("account_id", accountId)
-      .filter("quantity_on_hand", "lte", supabase.rpc as unknown as string)
       .lt("quantity_on_hand", 5); // Simplified — in production use: quantity_on_hand <= reorder_point
 
     const suggestions: Array<{

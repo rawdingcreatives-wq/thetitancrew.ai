@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Check, X, Clock } from "lucide-react";
 
 export function HILComplianceStats({ total, approved, rejected, pending }: { total: number; approved: number; rejected: number; pending: number }) {

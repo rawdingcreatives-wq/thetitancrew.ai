@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · ROI / Savings Calculator
  * Interactive 4-slider calculator showing projected revenue lift, hours saved,
@@ -37,7 +36,7 @@ interface ROICalculatorProps {
 function useCountUp(target: number, duration = 900): number {
   const [count, setCount] = useState(0);
   const prevTarget = useRef(0);
-  const frameRef = useRef<number>();
+  const frameRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const start = prevTarget.current;

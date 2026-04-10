@@ -7,12 +7,15 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../shared/types/database.types";
 import type { AgentType } from "../base/BaseAgent";
+import { createLogger } from "./logger";
+
+const logger = createLogger("CostGovernor");
 
 // Monthly budget by plan tier (USD)
 const PLAN_BUDGETS: Record<string, number> = {
-  basic: 8.0,     // ~$8/mo Claude API per account
-  pro: 15.0,      // ~$15/mo
-  enterprise: 40.0,
+  lite: 2.0,      // Free tier – tight budget
+  growth: 15.0,   // $399/mo plan
+  scale: 40.0,    // $799/mo plan
   trialing: 2.0,  // Tight budget on trials
 };
 
@@ -58,23 +61,28 @@ export class CostGovernor {
 
     if (!account) return false;
 
-    const monthlyBudget = PLAN_BUDGETS[account.plan] ?? PLAN_BUDGETS.basic;
+    const monthlyBudget = PLAN_BUDGETS[account.plan] ?? PLAN_BUDGETS.lite;
     const dailyBudget = AGENT_DAILY_BUDGETS[this.agentType] ?? 0.25;
 
     // Check daily agent budget
     if (agentCostToday >= dailyBudget) {
-      console.warn(
-        `[CostGovernor] Daily budget exceeded for ${this.agentType} on account ${this.accountId}: $${agentCostToday.toFixed(4)} >= $${dailyBudget}`
-      );
+      logger.warn({
+        agentType: this.agentType,
+        accountId: this.accountId,
+        spent: agentCostToday.toFixed(4),
+        dailyBudget: dailyBudget.toString(),
+      }, "Daily budget exceeded");
       return false;
     }
 
     // Check monthly account budget
     const monthCost = await this.fetchAccountCostThisMonth();
     if (monthCost >= monthlyBudget) {
-      console.warn(
-        `[CostGovernor] Monthly budget exceeded for account ${this.accountId}: $${monthCost.toFixed(4)} >= $${monthlyBudget}`
-      );
+      logger.warn({
+        accountId: this.accountId,
+        spent: monthCost.toFixed(4),
+        monthlyBudget: monthlyBudget.toString(),
+      }, "Monthly budget exceeded");
       return false;
     }
 
@@ -88,7 +96,7 @@ export class CostGovernor {
   async recordUsage(costUsd: number): Promise<void> {
     try {
       // Update rolling 30-day cost on agent instance
-      const { data: instance } = await this.supabase
+      const { data: instance } = await (this.supabase as any)
         .from("agent_instances")
         .select("token_cost_30d")
         .eq("account_id", this.accountId)
@@ -96,7 +104,7 @@ export class CostGovernor {
         .single();
 
       if (instance) {
-        await this.supabase
+        await (this.supabase as any)
           .from("agent_instances")
           .update({
             token_cost_30d: (instance.token_cost_30d ?? 0) + costUsd,
@@ -105,12 +113,12 @@ export class CostGovernor {
           .eq("agent_type", this.agentType);
       }
     } catch (err) {
-      console.error("[CostGovernor] Failed to record usage:", err);
+      logger.error({ error: err }, "Failed to record usage");
     }
   }
 
   private async fetchAccountPlan(): Promise<{ plan: string } | null> {
-    const { data } = await this.supabase
+    const { data } = await (this.supabase as any)
       .from("accounts")
       .select("plan")
       .eq("id", this.accountId)
@@ -122,7 +130,7 @@ export class CostGovernor {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const { data } = await this.supabase
+    const { data } = await (this.supabase as any)
       .from("agent_runs")
       .select("cost_usd")
       .eq("account_id", this.accountId)
@@ -131,7 +139,7 @@ export class CostGovernor {
     // Filter by agent type via join isn't straightforward here
     // In production: add agent_type directly to agent_runs or join with agent_instances
     if (!data) return 0;
-    return data.reduce((sum, r) => sum + (r.cost_usd ?? 0), 0);
+    return data.reduce((sum: number, r: any) => sum + (r.cost_usd ?? 0), 0);
   }
 
   private async fetchAccountCostThisMonth(): Promise<number> {
@@ -139,13 +147,13 @@ export class CostGovernor {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const { data } = await this.supabase
+    const { data } = await (this.supabase as any)
       .from("agent_runs")
       .select("cost_usd")
       .eq("account_id", this.accountId)
       .gte("created_at", monthStart.toISOString());
 
     if (!data) return 0;
-    return data.reduce((sum, r) => sum + (r.cost_usd ?? 0), 0);
+    return data.reduce((sum: number, r: any) => sum + (r.cost_usd ?? 0), 0);
   }
 }

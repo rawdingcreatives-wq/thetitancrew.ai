@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew — Pricing / Plan Selection Page
  *
@@ -13,22 +12,22 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Zap, Shield, ArrowRight, Star } from "lucide-react";
+import { Check, Zap, ArrowRight, Star } from "lucide-react";
 
 // ─── Plan data ────────────────────────────────────────────────────────────────
 
 const PLANS = [
   {
-    key:       "basic",
-    name:      "Basic",
-    price:     399,
-    priceLine: "$399/mo",
+    key:       "lite",
+    name:      "Lite",
+    price:     0,
+    priceLine: "Free",
     tag:       null,
     color:     "#64748B",
     accent:    "border-slate-200",
     highlight: false,
     features: [
-      "All 6 AI agents included",
+      "5 AI agents included",
       "Google Calendar integration",
       "QuickBooks Online sync",
       "SMS & email automations",
@@ -37,19 +36,20 @@ const PLANS = [
       "Up to 3 technicians",
     ],
     proFeatures: [],
-    cta: "Start with Basic",
+    cta: "Start with Lite",
   },
   {
-    key:       "pro",
-    name:      "Pro",
-    price:     799,
-    priceLine: "$799/mo",
+    key:       "growth",
+    name:      "Growth",
+    price:     399,
+    priceLine: "$399/mo",
     tag:       "Most Popular",
     color:     "#FF6B00",
     accent:    "border-[#FF6B00]",
     highlight: true,
     features: [
-      "Everything in Basic, plus:",
+      "Everything in Lite, plus:",
+      "All 6 AI agents (including Tech Dispatch)",
       "Tech Dispatch AI (route optimization)",
       "Multi-location support",
       "Priority support + onboarding call",
@@ -64,7 +64,32 @@ const PLANS = [
       "Custom workflows",
       "API access",
     ],
-    cta: "Start with Pro",
+    cta: "Start with Growth",
+  },
+  {
+    key:       "scale",
+    name:      "Scale",
+    price:     799,
+    priceLine: "$799/mo",
+    tag:       null,
+    color:     "#9F7AEA",
+    accent:    "border-purple-500",
+    highlight: false,
+    features: [
+      "Everything in Growth, plus:",
+      "White-label customization",
+      "Dedicated account manager",
+      "Priority support (2-hour SLA)",
+      "Custom deployment & onboarding",
+      "Advanced security & compliance",
+      "Unlimited users & locations",
+    ],
+    proFeatures: [
+      "White-label",
+      "Account manager",
+      "Priority SLA",
+    ],
+    cta: "Start with Scale",
   },
 ];
 
@@ -102,7 +127,7 @@ export default function PricingPage() {
 
       // Redirect to Stripe Checkout
       window.location.href = data.url;
-    } catch (err) {
+    } catch {
       setError("Network error. Please try again.");
       setLoading(null);
     }

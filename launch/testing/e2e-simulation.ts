@@ -150,9 +150,9 @@ async function simulateOnboarderAgent(ctx: {
   ownerName: string;
   ownerPhone: string;
   ownerEmail: string;
-  plan: "basic" | "pro";
+  plan: "lite" | "growth" | "scale";
 }): Promise<{ success: boolean; agentsCreated: number; memorySeedRows: number }> {
-  const agentCount = ctx.plan === "pro" ? 6 : 5;
+  const agentCount = ctx.plan === "growth" || ctx.plan === "scale" ? 6 : 5;
 
   mockDB.accounts.set(ctx.accountId, {
     id: ctx.accountId,
@@ -319,10 +319,10 @@ async function simulateForemanPredictorAgent(ctx: {
 
 async function simulateCostGovernor(ctx: {
   accountId: string;
-  plan: "basic" | "pro";
+  plan: "lite" | "growth" | "scale";
   monthlySpend: number;
 }): Promise<{ allowed: boolean; budget: number; utilization: number }> {
-  const budgets = { basic: 8, pro: 15 };
+  const budgets = { lite: 8, growth: 15, scale: 25 };
   const budget = budgets[ctx.plan];
   const utilization = ctx.monthlySpend / budget;
   const allowed = ctx.monthlySpend < budget * 1.1; // 10% overage buffer
@@ -441,10 +441,10 @@ async function runE2ESimulation(): Promise<void> {
       ownerName: "Carlos Rodriguez",
       ownerPhone: "+17139550123",
       ownerEmail: "carlos@rodriguezplumbing.com",
-      plan: "basic",
+      plan: "lite",
     });
     runner.assert(result.success, "Onboarding must succeed");
-    runner.assert(result.agentsCreated === 5, `Basic plan should have 5 agents, got ${result.agentsCreated}`);
+    runner.assert(result.agentsCreated === 5, `Lite plan should have 5 agents, got ${result.agentsCreated}`);
     runner.assert(result.memorySeedRows > 0, "Memory seeding must produce rows");
     return result;
   });
@@ -602,14 +602,14 @@ async function runE2ESimulation(): Promise<void> {
   runner.scenario("6 — API Budget Check (CostGovernor)");
 
   await runner.step("Within budget — allow", async () => {
-    const result = await simulateCostGovernor({ accountId, plan: "basic", monthlySpend: 5.50 });
+    const result = await simulateCostGovernor({ accountId, plan: "lite", monthlySpend: 5.50 });
     runner.assert(result.allowed === true, "Spend under budget must be allowed");
-    runner.assert(result.budget === 8, "Basic plan budget is $8/mo");
+    runner.assert(result.budget === 8, "Lite plan budget is $8/mo");
     return result;
   });
 
   await runner.step("Over 110% of budget — block", async () => {
-    const result = await simulateCostGovernor({ accountId, plan: "basic", monthlySpend: 9.50 });
+    const result = await simulateCostGovernor({ accountId, plan: "lite", monthlySpend: 9.50 });
     runner.assert(result.allowed === false, "Spend over 110% must be blocked");
     return result;
   });

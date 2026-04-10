@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · AddPartModal
  * Client component modal for adding a new inventory item.
@@ -50,8 +49,8 @@ export function AddPartModal({ accountId, onClose }: AddPartModalProps) {
       if (!res.ok) throw new Error(data.error ?? "Failed to add part");
       router.refresh();
       onClose();
-    } catch (err: any) {
-      setError(err.message ?? "Could not add part. Please try again.");
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : 'Could not add part') ?? "Could not add part. Please try again.");
     } finally {
       setSaving(false);
     }

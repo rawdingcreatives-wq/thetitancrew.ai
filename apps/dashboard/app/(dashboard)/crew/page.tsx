@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · AI Crew Management Page
  * Full view of all agents: status, metrics, enable/disable toggles,
@@ -11,6 +10,45 @@ import { AgentCard } from "@/components/crew/AgentCard";
 import { CrewSummaryBar } from "@/components/crew/CrewSummaryBar";
 import type { AgentType } from "@/lib/supabase/types";
 import { hasFeature } from "@/lib/plan-gates";
+
+interface Account {
+  id: string;
+  plan: string;
+  crew_deployed_at: string | null;
+}
+
+interface AgentInstanceData {
+  id: string;
+  agent_type: AgentType;
+  status: string;
+  actions_24h: number;
+  errors_24h: number;
+  last_run_at: string;
+  token_cost_30d: number;
+  account_id: string;
+  is_enabled: boolean;
+}
+
+interface AgentRun {
+  id: string;
+  agent_id: string;
+  trigger_event: string;
+  status: string;
+  started_at: string;
+  completed_at: string;
+  duration_ms: number;
+  output_summary: string;
+  cost_usd: number;
+  actions_taken: number;
+}
+
+interface DisplayAgent {
+  instance: AgentInstanceData | null; // AgentInstanceData is structurally compatible with AgentCard's AgentInstance at runtime
+  type: AgentType;
+  meta: { tagline: string; features: string[] };
+  isProOnly: boolean;
+  locked: boolean;
+}
 
 // ─── Agent display metadata ─────────────────────────────
 
@@ -53,27 +91,24 @@ export default async function CrewPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select("id, plan, crew_deployed_at")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
 
   if (!account) redirect("/login");
 
-  const { data: agents } = await supabase
-    .from("agent_instances")
+  const { data: agents } = await supabase.from("agent_instances")
     .select("*")
     .eq("account_id", account.id)
-    .order("agent_type");
+    .order("agent_type") as unknown as { data: AgentInstanceData[] | null };
 
   // Recent runs for activity feed
-  const { data: recentRuns } = await supabase
-    .from("agent_runs")
+  const { data: recentRuns } = await supabase.from("agent_runs")
     .select("id, agent_id, trigger_event, status, started_at, completed_at, duration_ms, output_summary, cost_usd, actions_taken")
     .eq("account_id", account.id)
     .order("started_at", { ascending: false })
-    .limit(20);
+    .limit(20) as { data: AgentRun[] | null };
 
   const customerAgents: AgentType[] = [
     "foreman_predictor", "scheduler", "customer_comm",
@@ -83,18 +118,18 @@ export default async function CrewPage() {
   // tech_dispatch requires the "techDispatch" feature flag (Pro or Elite)
   const canUseTechDispatch = hasFeature(account.plan, "techDispatch");
 
-  const displayAgents = customerAgents.map((type) => ({
-    instance: agents?.find((a) => a.agent_type === type) ?? null,
+  const displayAgents: DisplayAgent[] = customerAgents.map((type) => ({
+    instance: agents?.find((a: AgentInstanceData) => a.agent_type === type) ?? null,
     type,
     meta: AGENT_DESCRIPTIONS[type],
     isProOnly: type === "tech_dispatch",
     locked: type === "tech_dispatch" && !canUseTechDispatch,
   }));
 
-  const runningCount = agents?.filter((a) => a.status === "running").length ?? 0;
-  const errorCount = agents?.filter((a) => a.status === "error").length ?? 0;
-  const totalActions24h = agents?.reduce((s, a) => s + (a.actions_24h ?? 0), 0) ?? 0;
-  const totalCost30d = agents?.reduce((s, a) => s + (a.token_cost_30d ?? 0), 0) ?? 0;
+  const runningCount = agents?.filter((a: AgentInstanceData) => a.status === "running").length ?? 0;
+  const errorCount = agents?.filter((a: AgentInstanceData) => a.status === "error").length ?? 0;
+  const totalActions24h = agents?.reduce((s: number, a: AgentInstanceData) => s + (a.actions_24h ?? 0), 0) ?? 0;
+  const totalCost30d = agents?.reduce((s: number, a: AgentInstanceData) => s + (a.token_cost_30d ?? 0), 0) ?? 0;
 
   return (
     <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-6">
@@ -117,16 +152,16 @@ export default async function CrewPage() {
 
       {/* Agent cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {displayAgents.map(({ instance, type, meta, isProOnly, locked }) => (
+        {displayAgents.map(({ instance, type, meta, isProOnly, locked }: DisplayAgent) => (
           <AgentCard
             key={type}
             agentType={type}
-            instance={instance}
+            instance={instance as unknown as Parameters<typeof AgentCard>[0]["instance"]}
             tagline={meta.tagline}
             features={meta.features}
             isProOnly={isProOnly}
             locked={locked}
-            recentRuns={recentRuns?.filter((r) => r.agent_id === instance?.id).slice(0, 5) ?? []}
+            recentRuns={recentRuns?.filter((r: AgentRun) => r.agent_id === instance?.id).slice(0, 5) ?? []}
             accountId={account.id}
           />
         ))}

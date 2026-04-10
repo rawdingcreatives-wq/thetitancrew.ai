@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Onboarding Welcome Page
  * Shown after Stripe checkout.session.completed.

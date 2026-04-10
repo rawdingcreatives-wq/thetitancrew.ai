@@ -10,7 +10,7 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type PlanTier = "basic" | "pro" | "enterprise";
+export type PlanTier = "lite" | "growth" | "scale";
 export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled" | "paused";
 export type AgentType =
   | "scheduler" | "parts_inventory" | "customer_comm"
@@ -31,6 +31,10 @@ export type AccountRow = {
   business_name: string;
   email: string;
   phone: string | null;
+  owner_phone: string | null;
+  twilio_phone_number: string | null;
+  twilio_a2p_registered: boolean;
+  referral_code: string | null;
   trade_type: TradeType;
   state: string | null;
   city: string | null;

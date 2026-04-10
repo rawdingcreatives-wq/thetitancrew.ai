@@ -17,16 +17,17 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "../../apps/dashboard/lib/supabase/types";
 import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { createLogger } from "../guardrails/logger";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-const supabase = createClient<Database>(
+const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+const logger = createLogger("DemoCreatorAgent");
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -274,7 +275,7 @@ async function executeTool(
 
       const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
       if (!elevenLabsKey) {
-        console.warn("[DemoCreator] ElevenLabs API key not set — skipping TTS");
+        logger.warn({}, "ElevenLabs API key not set — skipping TTS");
         return { success: false, reason: "ELEVENLABS_API_KEY not configured", fallback: true };
       }
 
@@ -314,7 +315,7 @@ async function executeTool(
 
       const runwayKey = process.env.RUNWAY_API_KEY;
       if (!runwayKey) {
-        console.warn("[DemoCreator] Runway API key not set — using placeholder visuals");
+        logger.warn({}, "Runway API key not set — using placeholder visuals");
         // Create placeholder clips for testing
         fs.mkdirSync(outputDir, { recursive: true });
         return {
@@ -344,21 +345,21 @@ async function executeTool(
           signal: AbortSignal.timeout(60_000),
         });
 
-        const genData = await genResp.json();
+        const genData = (await genResp.json()) as any;
         const clipPath = path.join(outputDir, `clip_${i}.mp4`);
 
         // Poll for completion
-        if (genData.id) {
+        if ((genData as any).id) {
           let completed = false;
           for (let attempt = 0; attempt < 12; attempt++) {
             await new Promise((r) => setTimeout(r, 5000));
             const statusResp = await fetch(
-              `https://api.runwayml.com/v1/tasks/${genData.id}`,
+              `https://api.runwayml.com/v1/tasks/${(genData as any).id}`,
               { headers: { Authorization: `Bearer ${runwayKey}` } }
             );
-            const status = await statusResp.json();
-            if (status.status === "SUCCEEDED") {
-              const videoResp = await fetch(status.output[0]);
+            const status = (await statusResp.json()) as any;
+            if ((status as any).status === "SUCCEEDED") {
+              const videoResp = await fetch((status as any).output[0]);
               const videoBuffer = Buffer.from(await videoResp.arrayBuffer());
               fs.writeFileSync(clipPath, videoBuffer);
               clips.push(clipPath);
@@ -439,18 +440,16 @@ async function executeTool(
       const videoBuffer = fs.readFileSync(localPath);
       const uploadName = fileName ?? `demo_${leadId}_${Date.now()}.mp4`;
 
-      const { data, error } = await supabase.storage
-        .from("lead-demos")
+      const { data, error } = await (supabase.storage.from("lead-demos") as any)
         .upload(`demos/${uploadName}`, videoBuffer, {
           contentType: "video/mp4",
           cacheControl: "3600",
           upsert: true,
         });
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: (error as any).message };
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("lead-demos")
+      const { data: { publicUrl } } = (supabase.storage.from("lead-demos") as any)
         .getPublicUrl(`demos/${uploadName}`);
 
       // Cleanup local file
@@ -511,8 +510,8 @@ async function executeTool(
               body: formData.toString(),
             }
           );
-          const smsData = await smsResp.json();
-          results.sms = { sent: smsResp.ok, sid: smsData.sid };
+          const smsData = (await smsResp.json()) as any;
+          results.sms = { sent: smsResp.ok, sid: (smsData as any).sid };
 
           // Log to comms_log
           await supabase.from("comms_log").insert({
@@ -522,7 +521,7 @@ async function executeTool(
             from_address: twilioFrom,
             body: smsMessage,
             status: smsResp.ok ? "sent" : "failed",
-            external_id: smsData.sid,
+            external_id: (smsData as any).sid,
             ai_generated: true,
           });
         }
@@ -568,7 +567,7 @@ async function executeTool(
       }
 
       // Update lead status
-      await supabase.from("meta_leads")
+      await (supabase.from("meta_leads") as any)
         .update({ status: "demo_sent", demo_sent_at: new Date().toISOString() })
         .eq("id", leadId);
 
@@ -587,12 +586,11 @@ async function executeTool(
       if (videoUrl) updates.demo_video_url = videoUrl;
       if (sentAt) updates.demo_sent_at = sentAt;
 
-      const { error } = await supabase
-        .from("meta_leads")
+      const { error } = await (supabase.from("meta_leads") as any)
         .update(updates)
         .eq("id", leadId);
 
-      return { success: !error, error: error?.message };
+      return { success: !error, error: (error as any)?.message };
     }
 
     case "create_fallback_demo_link": {

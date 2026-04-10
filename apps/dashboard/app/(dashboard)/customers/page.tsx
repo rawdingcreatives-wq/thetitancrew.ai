@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Customers Page
  * Customer list with job history, contact info, and AI engagement status.
@@ -8,27 +7,54 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Users, Phone, Mail, MapPin, Star, TrendingUp, Clock } from "lucide-react";
 
+interface Account {
+  id: string;
+  business_name: string;
+}
+
+interface Job {
+  id: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string;
+  address: string;
+  status: string;
+  invoice_amount: number;
+  booked_by_ai: boolean;
+  created_at: string;
+  job_type: string;
+}
+
+interface Customer {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  jobs: Job[];
+  totalSpend: number;
+  aiBooked: number;
+  lastJob: string;
+}
+
 export default async function CustomersPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select("id, business_name")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
   if (!account) redirect("/login");
 
   // Pull customers from jobs (unique customer_name + phone combos)
-  const { data: jobs } = await supabase
-    .from("jobs")
+  const { data: jobs } = await supabase.from("jobs")
     .select("id, customer_name, customer_phone, customer_email, address, status, invoice_amount, booked_by_ai, created_at, job_type")
     .eq("account_id", account.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }) as { data: Job[] | null };
 
   // Aggregate into customer records
-  const customerMap = new Map();
+  const customerMap = new Map<string, Customer>();
   for (const job of jobs ?? []) {
     const key = job.customer_phone || job.customer_email || job.customer_name;
     if (!key) continue;
@@ -44,14 +70,14 @@ export default async function CustomersPage() {
         lastJob: job.created_at,
       });
     }
-    const c = customerMap.get(key);
+    const c = customerMap.get(key)!;
     c.jobs.push(job);
     c.totalSpend += job.invoice_amount ?? 0;
     if (job.booked_by_ai) c.aiBooked++;
     if (job.created_at > c.lastJob) c.lastJob = job.created_at;
   }
 
-  const customers = Array.from(customerMap.values()).sort(
+  const customers: Customer[] = Array.from(customerMap.values()).sort(
     (a, b) => new Date(b.lastJob).getTime() - new Date(a.lastJob).getTime()
   );
 

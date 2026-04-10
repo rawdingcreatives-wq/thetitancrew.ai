@@ -7,6 +7,9 @@
 import { google, calendar_v3 } from "googleapis";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../shared/types/database.types";
+import { createLogger } from "../guardrails/logger";
+
+const logger = createLogger("calendar");
 
 export interface CalendarSlot {
   start: string;     // ISO 8601
@@ -82,7 +85,7 @@ export class GoogleCalendarTool {
       if (localHour >= 7 && localHour < 18) {
         const slotEnd = new Date(cursor.getTime() + slotDurationHours * 60 * 60 * 1000);
         const isBusy = busySlots.some(
-          (b) =>
+          (b: any) =>
             new Date(b.start!!) < slotEnd && new Date(b.end!!) > cursor
         );
 
@@ -210,7 +213,7 @@ export class GoogleCalendarTool {
   // ── Private helpers ────────────────────────────────────────
 
   private async getCalendarClient(technicianId: string): Promise<calendar_v3.Calendar | null> {
-    const { data: account } = await this.supabase
+    const { data: account } = await (this.supabase as any)
       .from("accounts")
       .select("integrations")
       .eq("id", this.accountId)
@@ -220,7 +223,7 @@ export class GoogleCalendarTool {
     const gcal = integrations.google_calendar as { access_token?: string; refresh_token?: string } | undefined;
 
     if (!gcal?.refresh_token) {
-      console.warn(`[Calendar] No Google OAuth token for account ${this.accountId}`);
+      logger.warn({ accountId: this.accountId }, "No Google OAuth token for account");
       return null;
     }
 
@@ -239,7 +242,7 @@ export class GoogleCalendarTool {
   private async fetchTechnician(
     technicianId: string
   ): Promise<{ calendar_id: string | null; name: string; timezone?: string } | null> {
-    const { data } = await this.supabase
+    const { data } = await (this.supabase as any)
       .from("technicians")
       .select("calendar_id, name")
       .eq("id", technicianId)
@@ -247,7 +250,7 @@ export class GoogleCalendarTool {
 
     if (!data) return null;
 
-    const { data: account } = await this.supabase
+    const { data: account } = await (this.supabase as any)
       .from("accounts")
       .select("timezone")
       .eq("id", this.accountId)

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · JobKanban
  * Drag-to-update kanban board with 6 status columns.
@@ -9,7 +8,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Clock, DollarSign, User, MapPin, ChevronRight } from "lucide-react";
+import { Bot, Clock, DollarSign, User } from "lucide-react";
 import type { JobStatus } from "@/lib/supabase/types";
 
 interface Job {
@@ -29,7 +28,7 @@ interface Job {
 
 interface JobKanbanProps {
   jobs: Job[];
-  accountId: string;
+  _accountId: string;
 }
 
 const COLUMNS: { key: JobStatus; label: string; color: string; headerBg: string }[] = [
@@ -47,7 +46,7 @@ const PRIORITY_COLORS: Record<number, string> = {
   3: "border-l-slate-300 border-l-2",
 };
 
-export function JobKanban({ jobs, accountId }: JobKanbanProps) {
+export function JobKanban({ jobs, _accountId }: JobKanbanProps) {
   const router = useRouter();
   const [draggedJobId, setDraggedJobId] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);

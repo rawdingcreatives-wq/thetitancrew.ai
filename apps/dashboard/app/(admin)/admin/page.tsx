@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Admin Dashboard Home
  *
@@ -8,11 +7,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   Users, DollarSign, Bot, AlertTriangle, HeadphonesIcon,
-  TrendingUp, Activity, Zap, ArrowUpRight, ArrowDownRight,
-  Clock, UserPlus, UserMinus, BarChart3,
+  TrendingUp, Activity, ArrowDownRight,
+  Clock, UserPlus, UserMinus,
 } from "lucide-react";
 
 interface KPI {
@@ -20,7 +20,7 @@ interface KPI {
   value: string;
   change?: string;
   trend?: "up" | "down" | "neutral";
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   color: string;
 }
 
@@ -42,8 +42,24 @@ interface RecentAgentError {
   business_name?: string;
 }
 
+interface DashboardStats {
+  totalAccounts: number;
+  activeAccounts: number;
+  trialAccounts: number;
+  canceledAccounts: number;
+  mrr: number;
+  arr: number;
+  agentsRunning: number;
+  agentsError: number;
+  churnRisk: number;
+}
+
+interface MRRData {
+  mrr: string | number;
+}
+
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentAccounts, setRecentAccounts] = useState<RecentAccount[]>([]);
   const [agentErrors, setAgentErrors] = useState<RecentAgentError[]>([]);
   const [openTickets, setOpenTickets] = useState(0);
@@ -80,7 +96,7 @@ export default function AdminDashboardPage() {
         (supabase.from("agent_instances") as any).select("id, agent_type, last_error, account_id").eq("status", "error").limit(5),
       ]);
 
-      const totalMRR = (mrrRes.data ?? []).reduce((sum: number, a: any) => sum + (parseFloat(a.mrr) || 0), 0);
+      const totalMRR = (mrrRes.data as MRRData[] ?? []).reduce((sum: number, a: MRRData) => sum + (parseFloat(String(a.mrr)) || 0), 0);
 
       setStats({
         totalAccounts: accountsRes.count ?? 0,
@@ -119,9 +135,9 @@ export default function AdminDashboardPage() {
     { label: "MRR",             value: "$" + (stats?.mrr ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }), icon: DollarSign, color: "from-[#FF6B00] to-orange-700" },
     { label: "ARR",             value: "$" + (stats?.arr ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }), icon: TrendingUp, color: "from-purple-500 to-purple-700" },
     { label: "Agents Running",  value: (stats?.agentsRunning ?? 0).toLocaleString(),    icon: Bot,             color: "from-cyan-500 to-cyan-700" },
-    { label: "Agent Errors",    value: (stats?.agentsError ?? 0).toLocaleString(),      icon: AlertTriangle,   color: stats?.agentsError > 0 ? "from-red-500 to-red-700" : "from-slate-500 to-slate-700" },
+    { label: "Agent Errors",    value: (stats?.agentsError ?? 0).toLocaleString(),      icon: AlertTriangle,   color: (stats?.agentsError ?? 0) > 0 ? "from-red-500 to-red-700" : "from-slate-500 to-slate-700" },
     { label: "Open Tickets",    value: openTickets.toLocaleString(),                     icon: HeadphonesIcon,  color: openTickets > 0 ? "from-yellow-500 to-yellow-700" : "from-slate-500 to-slate-700" },
-    { label: "Churn Risk",      value: (stats?.churnRisk ?? 0).toLocaleString(),        icon: UserMinus,       color: stats?.churnRisk > 0 ? "from-red-500 to-red-700" : "from-slate-500 to-slate-700" },
+    { label: "Churn Risk",      value: (stats?.churnRisk ?? 0).toLocaleString(),        icon: UserMinus,       color: (stats?.churnRisk ?? 0) > 0 ? "from-red-500 to-red-700" : "from-slate-500 to-slate-700" },
     { label: "Canceled",        value: (stats?.canceledAccounts ?? 0).toLocaleString(), icon: ArrowDownRight,  color: "from-rose-500 to-rose-700" },
   ];
 
@@ -165,9 +181,9 @@ export default function AdminDashboardPage() {
               <UserPlus className="w-4 h-4 text-[#FF6B00]" />
               Recent Signups
             </h2>
-            <a href="/admin/accounts" className="text-xs text-[#FF6B00] hover:underline">
-              View all →
-            </a>
+            <Link href="/admin/accounts" className="text-xs text-[#FF6B00] hover:underline">
+              View all &rarr;
+            </Link>
           </div>
           <div className="divide-y divide-white/5">
             {recentAccounts.length === 0 ? (
@@ -204,9 +220,9 @@ export default function AdminDashboardPage() {
               <AlertTriangle className="w-4 h-4 text-red-400" />
               Agent Errors
             </h2>
-            <a href="/admin/agents" className="text-xs text-[#FF6B00] hover:underline">
-              View all →
-            </a>
+            <Link href="/admin/agents" className="text-xs text-[#FF6B00] hover:underline">
+              View all &rarr;
+            </Link>
           </div>
           <div className="divide-y divide-white/5">
             {agentErrors.length === 0 ? (

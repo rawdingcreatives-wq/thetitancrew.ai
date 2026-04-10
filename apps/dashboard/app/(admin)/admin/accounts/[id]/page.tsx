@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 /**
@@ -16,10 +15,10 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import {
-  ArrowLeft, Building2, User, Mail, Phone, MapPin,
+  ArrowLeft, User, Mail, Phone,
   CreditCard, Bot, Wrench, Calendar, DollarSign,
-  AlertTriangle, CheckCircle2, Clock, TrendingUp,
-  Activity, Shield, ExternalLink, Loader2, XCircle,
+  CheckCircle2,
+  Activity, ExternalLink, Loader2, XCircle,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────
@@ -81,9 +80,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const PLAN_COLORS: Record<string, string> = {
-  basic: "bg-slate-500/20 text-slate-300",
-  pro:   "bg-[#FF6B00]/20 text-[#FF6B00]",
-  enterprise: "bg-purple-500/20 text-purple-400",
+  lite:   "bg-slate-500/20 text-slate-300",
+  growth: "bg-blue-500/20 text-blue-400",
+  scale:  "bg-[#FF6B00]/20 text-[#FF6B00]",
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -193,7 +192,7 @@ export default function AdminAccountDetailPage() {
           <p className="text-sm text-slate-400">{account.trade_type} &middot; {account.city}, {account.state}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${PLAN_COLORS[account.plan] ?? PLAN_COLORS.basic}`}>
+          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${PLAN_COLORS[account.plan] ?? PLAN_COLORS.lite}`}>
             {account.plan}
           </span>
           <StatusBadge status={account.subscription_status} />
@@ -363,7 +362,7 @@ function InfoCard({
   highlight = false,
   valueColor,
 }: {
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   highlight?: boolean;

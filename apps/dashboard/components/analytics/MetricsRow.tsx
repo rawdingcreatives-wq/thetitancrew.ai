@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · MetricsRow
  * 4-card KPI strip across the top of the dashboard.

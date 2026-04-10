@@ -18,13 +18,14 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "../../apps/dashboard/lib/supabase/types";
+import { createLogger } from "../guardrails/logger";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-const supabase = createClient<Database>(
+const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+const leadLog = createLogger("LeadHunterAgent");
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -237,12 +238,17 @@ async function executeTool(
         maxResults?: number;
       };
 
-      console.log(`[LeadHunter] Searching ${platform} for: ${keywords.join(", ")} | Location: ${location ?? "nationwide"}`);
+      leadLog.info({
+        event: "search_social_signals",
+        platform,
+        keywords,
+        location: location ?? "nationwide",
+      }, "Searching social signals");
 
       // Apify integration stub
       const apifyToken = process.env.APIFY_API_TOKEN;
       if (!apifyToken) {
-        console.warn("[LeadHunter] APIFY_API_TOKEN not set — returning mock signal");
+        leadLog.warn({ event: "apify_token_missing" }, "APIFY_API_TOKEN not set — returning mock signal");
         return {
           signals: [
             {
@@ -286,8 +292,8 @@ async function executeTool(
         }
       );
 
-      const results = await runResp.json();
-      return { signals: results, total: results.length, platform };
+      const results = (await runResp.json()) as any;
+      return { signals: (results as any), total: (results as any).length, platform };
     }
 
     case "qualify_lead_signal": {
@@ -371,8 +377,8 @@ async function executeTool(
       const placesResp = await fetch(
         `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${placesApiKey}`
       );
-      const placesData = await placesResp.json();
-      const place = placesData.results?.[0];
+      const placesData = (await placesResp.json()) as any;
+      const place = (placesData as any).results?.[0];
 
       if (!place) return { enriched: false, reason: "No business found" };
 
@@ -380,7 +386,7 @@ async function executeTool(
       const detailResp = await fetch(
         `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,website,rating,user_ratings_total&key=${placesApiKey}`
       );
-      const detail = (await detailResp.json()).result ?? {};
+      const detail = ((await detailResp.json()) as any).result ?? {};
 
       return {
         enriched: true,
@@ -397,8 +403,7 @@ async function executeTool(
 
     case "save_lead_to_db": {
       const { lead } = toolInput as { lead: QualifiedLead };
-      const { data, error } = await supabase
-        .from("meta_leads")
+      const { data, error } = await (supabase.from("meta_leads") as any)
         .insert({
           business_name: lead.businessName,
           owner_name: lead.ownerName,
@@ -419,8 +424,8 @@ async function executeTool(
         .select("id")
         .single();
 
-      if (error) return { success: false, error: error.message };
-      return { success: true, leadId: data?.id };
+      if (error) return { success: false, error: (error as any).message };
+      return { success: true, leadId: (data as any)?.id };
     }
 
     case "check_existing_leads": {
@@ -452,7 +457,9 @@ async function executeTool(
         },
         body: JSON.stringify({ event: "demo_create", payload }),
         signal: AbortSignal.timeout(10_000),
-      }).catch(console.error);
+      }).catch((err) => {
+        leadLog.error({ event: "trigger_demo_failed", error: String(err), leadId: payload.leadId }, "Failed to trigger demo creator");
+      });
 
       return { triggered: true };
     }
@@ -466,7 +473,9 @@ async function executeTool(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(toolInput),
-      }).catch(console.error);
+      }).catch((err) => {
+        leadLog.error({ event: "email_drip_failed", error: String(err), leadId: toolInput.leadId }, "Failed to add lead to email drip");
+      });
 
       return { queued: true };
     }
@@ -481,7 +490,12 @@ async function executeTool(
         message: string;
       };
 
-      console.log(`[LeadHunter] Posting to ${platform}/${communityName}: ${message.slice(0, 80)}…`);
+      leadLog.info({
+        event: "post_to_community",
+        platform,
+        communityName,
+        messagePreview: message.slice(0, 80),
+      }, "Posting to trades community");
 
       // Stub — real implementation via Apify/Reddit API
       return {
@@ -493,19 +507,18 @@ async function executeTool(
     }
 
     case "get_hunt_summary": {
-      const { data: sessionLeads } = await supabase
-        .from("meta_leads")
+      const { data: sessionLeads } = await (supabase.from("meta_leads") as any)
         .select("lead_score, priority, status")
         .gte("created_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
 
       return {
-        total: sessionLeads?.length ?? 0,
-        high: sessionLeads?.filter((l) => l.priority === "high").length ?? 0,
-        medium: sessionLeads?.filter((l) => l.priority === "medium").length ?? 0,
-        low: sessionLeads?.filter((l) => l.priority === "low").length ?? 0,
+        total: (sessionLeads as any)?.length ?? 0,
+        high: (sessionLeads as any)?.filter((l: any) => l.priority === "high").length ?? 0,
+        medium: (sessionLeads as any)?.filter((l: any) => l.priority === "medium").length ?? 0,
+        low: (sessionLeads as any)?.filter((l: any) => l.priority === "low").length ?? 0,
         avgScore:
-          sessionLeads && sessionLeads.length > 0
-            ? Math.round(sessionLeads.reduce((sum, l) => sum + (l.lead_score ?? 0), 0) / sessionLeads.length)
+          (sessionLeads as any) && (sessionLeads as any).length > 0
+            ? Math.round((sessionLeads as any).reduce((sum: number, l: any) => sum + (l.lead_score ?? 0), 0) / (sessionLeads as any).length)
             : 0,
       };
     }
@@ -610,13 +623,12 @@ SESSION ID: ${sessionId}`;
   }
 
   // Final count from DB
-  const { data: newLeads } = await supabase
-    .from("meta_leads")
+  const { data: newLeads } = await (supabase.from("meta_leads") as any)
     .select("id")
     .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
 
   return {
-    leadsFound: newLeads?.length ?? 0,
+    leadsFound: (newLeads as any)?.length ?? 0,
     demosTriggered,
     dripsQueued,
   };
@@ -627,11 +639,11 @@ SESSION ID: ${sessionId}`;
 if (require.main === module) {
   runLeadHunterAgent({ huntDepth: "standard" })
     .then((result) => {
-      console.log("[LeadHunter] Hunt complete:", result);
+      leadLog.info({ event: "hunt_complete", ...result }, "Hunt complete");
       process.exit(0);
     })
     .catch((err) => {
-      console.error("[LeadHunter] Fatal error:", err);
+      leadLog.error({ event: "hunt_fatal_error", error: String(err), stack: err instanceof Error ? err.stack : undefined }, "Fatal error during lead hunt");
       process.exit(1);
     });
 }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Admin Accounts Browser
  *
@@ -11,8 +10,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  Search, Filter, ChevronDown, AlertTriangle, Ban,
-  Flag, ExternalLink, Users, ArrowUpDown, X,
+  Search, Ban,
+  Flag, ExternalLink, ArrowUpDown, X,
 } from "lucide-react";
 
 interface Account {
@@ -47,9 +46,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const PLAN_COLORS: Record<string, string> = {
-  basic:      "bg-slate-500/20 text-slate-300",
-  pro:        "bg-blue-500/20 text-blue-400",
-  enterprise: "bg-[#FF6B00]/20 text-[#FF6B00]",
+  lite:   "bg-slate-500/20 text-slate-300",
+  growth: "bg-blue-500/20 text-blue-400",
+  scale:  "bg-[#FF6B00]/20 text-[#FF6B00]",
 };
 
 export default function AdminAccountsPage() {
@@ -93,16 +92,18 @@ export default function AdminAccountsPage() {
     if (filterStatus !== "all") list = list.filter((a) => a.subscription_status === filterStatus);
 
     list.sort((a, b) => {
-      let va: any = a[sortKey];
-      let vb: any = b[sortKey];
+      let va: number | string = ((a[sortKey] as unknown) ?? "") as number | string;
+      let vb: number | string = ((b[sortKey] as unknown) ?? "") as number | string;
       if (sortKey === "created_at" || sortKey === "last_active_at") {
-        va = va ? new Date(va).getTime() : 0;
-        vb = vb ? new Date(vb).getTime() : 0;
+        const vaTime = va ? new Date(String(va)).getTime() : 0;
+        const vbTime = vb ? new Date(String(vb)).getTime() : 0;
+        va = vaTime;
+        vb = vbTime;
       }
-      if (typeof va === "string") va = va.toLowerCase();
-      if (typeof vb === "string") vb = vb.toLowerCase();
-      if (va < vb) return sortAsc ? -1 : 1;
-      if (va > vb) return sortAsc ? 1 : -1;
+      const vaStr = typeof va === "string" ? va.toLowerCase() : va;
+      const vbStr = typeof vb === "string" ? vb.toLowerCase() : vb;
+      if (vaStr < vbStr) return sortAsc ? -1 : 1;
+      if (vaStr > vbStr) return sortAsc ? 1 : -1;
       return 0;
     });
     return list;
@@ -174,9 +175,9 @@ export default function AdminAccountsPage() {
           className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/50"
         >
           <option value="all">All Plans</option>
-          <option value="basic">Basic</option>
-          <option value="pro">Pro</option>
-          <option value="enterprise">Enterprise</option>
+          <option value="lite">Lite</option>
+          <option value="growth">Growth</option>
+          <option value="scale">Scale</option>
         </select>
         <select
           value={filterStatus}

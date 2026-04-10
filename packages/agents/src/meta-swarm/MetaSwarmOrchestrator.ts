@@ -5,6 +5,37 @@
  * Manages scheduling, routing, error handling, and coordination
  * of the autonomous business growth engine.
  *
+ * ═══════════════════════════════════════════════════════════════
+ * EXECUTION MODEL — who owns what:
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * This Express server (Railway) is the SOLE RUNTIME for agent logic.
+ * n8n (also on Railway) is a SCHEDULER + WEBHOOK RELAY, never executes agent code.
+ *
+ *   ┌─────────────────────┐      ┌───────────────────────────────────┐
+ *   │  Dashboard (Vercel) │─────▶│  This server (Railway, port 3001) │
+ *   │  /api/agents/trigger│      │  POST /crews/trigger              │
+ *   └─────────────────────┘      │  POST /meta-swarm/trigger         │
+ *                                │                                   │
+ *   ┌─────────────────────┐      │  Dispatches to:                   │
+ *   │  n8n (Railway)      │─────▶│  • MetaSwarm agents (this file)   │
+ *   │  Cron → webhook POST│      │  • CustomerCrewOrchestrator       │
+ *   └─────────────────────┘      └───────────────────────────────────┘
+ *
+ *   ┌─────────────────────┐
+ *   │  Stripe Webhooks    │──▶ Dashboard /api/webhooks/stripe ──▶ this server
+ *   └─────────────────────┘
+ *
+ * ONBOARDING PATH:
+ *   Dashboard "Launch TitanCrew" → POST /api/agents/trigger { event: "onboard_deploy" }
+ *     → this server /crews/trigger → dispatchMetaEvent("onboard_deploy")
+ *     → OnboarderAgent runs 12-step activation
+ *
+ * SCHEDULED RUNS (daily/weekly):
+ *   n8n cron → POST ${AGENT_API_URL}/crews/trigger { event: "daily_morning_sweep" }
+ *     → this server routes to CustomerCrewOrchestrator
+ *   OR: Internal setInterval jobs (lead_hunt every 6h, daily_churn_scan at 9 AM)
+ *
  * Meta-agents under supervision:
  *   1. LeadHunterAgent     — Social signal hunting + lead qualification
  *   2. DemoCreatorAgent    — Personalized video demo generation
@@ -13,13 +44,13 @@
  *   5. BillingChurnAgent   — Payment recovery + churn prevention
  *
  * Trigger sources:
- *   - n8n cron workflows (scheduled)
- *   - Stripe webhooks (billing events)
- *   - Agent API events (inter-agent triggers)
- *   - Direct API calls from dashboard
+ *   - n8n cron workflows (scheduled → POST to /crews/trigger)
+ *   - Stripe webhooks (via dashboard → POST to /crews/trigger)
+ *   - Dashboard UI actions (POST to /crews/trigger)
+ *   - Internal setInterval (lead_hunt, churn_scan, weekly_optimization)
  *
  * Architecture: Express.js server on Railway/Fly.io
- * Exposes: POST /meta-swarm/trigger
+ * Exposes: POST /crews/trigger, POST /meta-swarm/trigger, GET /health
  */
 
 import express from "express";
@@ -29,10 +60,13 @@ import { runOnboarderAgent } from "./OnboarderAgent";
 import { runPerformanceOptimizerAgent } from "./PerformanceOptimizerAgent";
 import { runBillingChurnAgent, runDailyChurnScan } from "./BillingChurnAgent";
 import { createClient } from "@supabase/supabase-js";
+import { createLogger } from "../guardrails/logger";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Database = any; // inlined — avoids cross-package import that breaks tsc
 
-const supabase = createClient<Database>(
+const msLog = createLogger("MetaSwarmOrchestrator");
+
+const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
@@ -149,7 +183,7 @@ async function dispatchMetaEvent(trigger: MetaSwarmTrigger): Promise<{
           tradeType: trigger.payload?.tradeType as string,
           teamSize: trigger.payload?.teamSize as string,
           phone: trigger.payload?.phone as string,
-          plan: (trigger.payload?.planTier as "basic" | "pro") ?? "basic",
+          plan: (trigger.payload?.planTier as "lite" | "growth" | "scale") ?? "lite",
           timezone: trigger.payload?.timezone as string,
           googleCalendarConnected: trigger.payload?.googleCalendarConnected as boolean,
           quickbooksConnected: trigger.payload?.quickbooksConnected as boolean,
@@ -211,7 +245,7 @@ async function dispatchMetaEvent(trigger: MetaSwarmTrigger): Promise<{
       duration_ms: durationMs,
     }).eq("run_id", runId);
 
-    console.log(`[MetaSwarm] ✅ ${trigger.event} completed in ${durationMs}ms`, result);
+    msLog.info({ event: "trigger_completed", trigger: trigger.event, durationMs }, `${trigger.event} completed in ${durationMs}ms`);
     return { success: true, runId, result };
 
   } catch (err) {
@@ -226,13 +260,13 @@ async function dispatchMetaEvent(trigger: MetaSwarmTrigger): Promise<{
       duration_ms: durationMs,
     }).eq("run_id", runId);
 
-    console.error(`[MetaSwarm] ❌ ${trigger.event} failed:`, error);
+    msLog.error({ event: "trigger_failed", trigger: trigger.event, err: error }, `${trigger.event} failed`);
 
     // Auto-retry for transient failures (max 3 attempts)
     const retryAttempt = (trigger.retryAttempt ?? 0) + 1;
     if (retryAttempt <= 3 && isTransientError(error)) {
       const delayMs = retryAttempt * 5000;
-      console.log(`[MetaSwarm] Retrying ${trigger.event} in ${delayMs}ms (attempt ${retryAttempt})`);
+      msLog.warn({ event: "trigger_retry", trigger: trigger.event, retryAttempt, delayMs }, `Retrying ${trigger.event} in ${delayMs}ms`);
       setTimeout(() => {
         runQueue.push({ ...trigger, retryAttempt });
         processQueue();
@@ -277,14 +311,13 @@ async function processQueue(): Promise<void> {
 // ─── Helper: Schedule demos for high-score unprocessed leads ─
 
 async function scheduleHighScoreLeadDemos(): Promise<void> {
-  const { data: leads } = await supabase
-    .from("meta_leads")
+  const { data: leads } = await (supabase.from("meta_leads") as any)
     .select("id, business_name, owner_name, trade_type, pain_points, personalized_hook, phone, email, location")
     .eq("status", "new")
     .gte("lead_score", 70)
     .limit(10);
 
-  for (const lead of leads ?? []) {
+  for (const lead of (leads as any) ?? []) {
     runQueue.push({
       event: "demo_create",
       payload: {
@@ -339,7 +372,7 @@ app.post("/meta-swarm/trigger", requireAuth, async (req, res) => {
   // Queue normal priority
   const queueId = `q_${Date.now()}`;
   runQueue.push(body);
-  processQueue().catch(console.error);
+  processQueue().catch((err) => msLog.error({ event: "queue_processing_failed", err: String(err) }, "Queue processing failed"));
 
   return res.json({ queued: true, queueId, position: runQueue.length });
 });
@@ -402,8 +435,7 @@ app.get("/meta-swarm/health", (req, res) => {
 
 // GET /meta-swarm/runs — Recent run history
 app.get("/meta-swarm/runs", requireAuth, async (req, res) => {
-  const { data } = await supabase
-    .from("agent_runs")
+  const { data } = await (supabase.from("agent_runs") as any)
     .select("run_id, agent_type, status, started_at, completed_at, duration_ms, error_message")
     .like("agent_type", "meta_%")
     .order("started_at", { ascending: false })
@@ -419,7 +451,7 @@ function setupScheduledJobs(): void {
   const SIX_HOURS = 6 * 60 * 60 * 1000;
   setInterval(() => {
     runQueue.push({ event: "lead_hunt", priority: "normal" });
-    processQueue().catch(console.error);
+    processQueue().catch((err) => msLog.error({ event: "queue_processing_failed", err: String(err) }, "Queue processing failed"));
   }, SIX_HOURS);
 
   // Daily churn scan: every 24 hours at 9 AM
@@ -429,11 +461,11 @@ function setupScheduledJobs(): void {
   if (next9am <= now) next9am.setDate(next9am.getDate() + 1);
   setTimeout(() => {
     runQueue.push({ event: "daily_churn_scan", priority: "normal" });
-    processQueue().catch(console.error);
+    processQueue().catch((err) => msLog.error({ event: "queue_processing_failed", err: String(err) }, "Queue processing failed"));
     // Then repeat every 24h
     setInterval(() => {
       runQueue.push({ event: "daily_churn_scan", priority: "normal" });
-      processQueue().catch(console.error);
+      processQueue().catch((err) => msLog.error({ event: "queue_processing_failed", err: String(err) }, "Queue processing failed"));
     }, 24 * 60 * 60 * 1000);
   }, next9am.getTime() - now.getTime());
 
@@ -442,17 +474,14 @@ function setupScheduledJobs(): void {
   const nextSunday3am = getNextSunday3am();
   setTimeout(() => {
     runQueue.push({ event: "weekly_optimization", priority: "low" });
-    processQueue().catch(console.error);
+    processQueue().catch((err) => msLog.error({ event: "queue_processing_failed", err: String(err) }, "Queue processing failed"));
     setInterval(() => {
       runQueue.push({ event: "weekly_optimization", priority: "low" });
-      processQueue().catch(console.error);
+      processQueue().catch((err) => msLog.error({ event: "queue_processing_failed", err: String(err) }, "Queue processing failed"));
     }, WEEK_MS);
   }, nextSunday3am.getTime() - now.getTime());
 
-  console.log("[MetaSwarm] Scheduled jobs initialized");
-  console.log(`  - Lead hunt: every 6 hours`);
-  console.log(`  - Daily churn scan: daily at 9 AM`);
-  console.log(`  - Weekly optimization: Sundays at 3 AM UTC`);
+  msLog.info({ event: "scheduled_jobs_initialized" }, "Scheduled jobs initialized: lead_hunt (6h), daily_churn_scan (9 AM), weekly_optimization (Sunday 3 AM UTC)");
 }
 
 function getNextSunday3am(): Date {
@@ -467,15 +496,44 @@ function getNextSunday3am(): Date {
 
 const PORT = parseInt(process.env.PORT ?? process.env.AGENT_API_PORT ?? "3001", 10);
 
+// ─── Startup Validation ──────────────────────────────────────
+
+function validateRequiredEnvVars(): void {
+  const required: Array<{ key: string; hint: string }> = [
+    { key: "SUPABASE_URL", hint: "Supabase project URL" },
+    { key: "SUPABASE_SERVICE_ROLE_KEY", hint: "Supabase service role key (Settings → API)" },
+    { key: "AGENT_API_SECRET", hint: "Shared secret for dashboard↔agent auth" },
+    { key: "ANTHROPIC_API_KEY", hint: "Anthropic API key for Claude-powered agents" },
+  ];
+
+  const missing = required.filter((v) => !process.env[v.key]);
+  if (missing.length > 0) {
+    for (const v of missing) {
+      msLog.error({ event: "missing_env_var", envVar: v.key }, `Missing required env var: ${v.key} — ${v.hint}`);
+    }
+    throw new Error(`Cannot start: missing required environment variables: ${missing.map((v) => v.key).join(", ")}`);
+  }
+
+  // Warn on optional but important vars
+  const optional = ["SENDGRID_API_KEY", "TWILIO_ACCOUNT_SID", "OPENAI_API_KEY"];
+  for (const key of optional) {
+    if (!process.env[key]) {
+      msLog.warn({ event: "missing_optional_env_var", envVar: key }, `Optional env var ${key} not set — some agent features will be degraded`);
+    }
+  }
+}
+
 if (require.main === module) {
+  validateRequiredEnvVars();
+
   app.listen(PORT, () => {
-    console.log(`[MetaSwarm] 🚀 TitanCrew MetaSwarm Orchestrator running on port ${PORT}`);
+    msLog.info({ event: "server_started", port: PORT }, `TitanCrew MetaSwarm Orchestrator running on port ${PORT}`);
     setupScheduledJobs();
 
     // Initial lead hunt on startup (with 30s delay)
     setTimeout(() => {
       runQueue.push({ event: "lead_hunt", priority: "low", payload: { huntDepth: "quick" } });
-      processQueue().catch(console.error);
+      processQueue().catch((err) => msLog.error({ event: "queue_processing_failed", err: String(err) }, "Queue processing failed"));
     }, 30_000);
   });
 }

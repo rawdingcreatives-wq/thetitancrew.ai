@@ -68,8 +68,7 @@ NEVER:
         const todayEnd = new Date();
         todayEnd.setHours(23, 59, 59, 999);
 
-        const { data } = await this.supabase
-          .from("jobs")
+        const { data } = await (this.supabase.from("jobs") as any)
           .select(`
             id, title, job_type, scheduled_start, scheduled_end, address, lat, lng, priority, estimate_amount, notes,
             trade_customers!inner(id, name, phone),
@@ -111,8 +110,7 @@ NEVER:
       handler: async (input) => {
         const jobIds = input.job_ids as string[];
 
-        const { data: jobs } = await this.supabase
-          .from("jobs")
+        const { data: jobs } = await (this.supabase.from("jobs") as any)
           .select("id, title, lat, lng, priority, scheduled_start, scheduled_end, estimate_amount")
           .eq("account_id", this.config.accountId)
           .in("id", jobIds);
@@ -180,8 +178,7 @@ NEVER:
       riskLevel: "low",
       handler: async (input, ctx) => {
         // Update job status
-        await this.supabase
-          .from("jobs")
+        await (this.supabase.from("jobs") as any)
           .update({ status: "dispatched" })
           .eq("id", input.job_id as string)
           .eq("account_id", this.config.accountId);
@@ -274,15 +271,14 @@ NEVER:
         const todayEnd = new Date();
         todayEnd.setHours(23, 59, 59, 999);
 
-        const { data: techs } = await this.supabase
-          .from("technicians")
+        const { data: techs } = await (this.supabase.from("technicians") as any)
           .select("id, name, phone, skill_tags")
           .eq("account_id", this.config.accountId)
           .eq("is_active", true);
 
         const skillsNeeded = (input.required_skills as string[]) ?? [];
 
-        const qualifiedTechs = (techs ?? []).filter((tech) => {
+        const qualifiedTechs = (techs ?? []).filter((tech: any) => {
           if (skillsNeeded.length === 0) return true;
           const techSkills = (tech.skill_tags as string[]) ?? [];
           return skillsNeeded.some((s) => techSkills.includes(s));

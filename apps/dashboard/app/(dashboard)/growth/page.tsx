@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew — /growth Dashboard Page
  *
@@ -12,11 +11,47 @@
 
 import { createServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { formatCurrency } from "@/lib/utils";
 import ReferralCard from "@/components/growth/ReferralCard";
 import CaseStudyList from "@/components/growth/CaseStudyList";
 import SocialActivityChart from "@/components/growth/SocialActivityChart";
 import MilestoneTimeline from "@/components/growth/MilestoneTimeline";
+
+interface Account {
+  id: string;
+  business_name: string;
+  owner_name: string;
+  referral_code: string;
+  plan: string;
+}
+
+interface CaseStudyData {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string;
+  status: string;
+  created_at: string;
+  published_at: string | null;
+}
+
+interface SocialPost {
+  platform: string;
+  created_at: string;
+}
+
+interface ReferralData {
+  code: string;
+  uses: number;
+  credits_earned: number;
+}
+
+interface SocialGroup {
+  platform: string;
+  group_name: string;
+  last_posted_at: string | null;
+  total_posts: number;
+  active: boolean;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -29,9 +64,11 @@ export default async function GrowthPage() {
     .from("accounts")
     .select("id, business_name, owner_name, referral_code, plan")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
 
   if (!account) redirect("/onboarding");
+
+  const accountId = account.id;
 
   // Parallel data fetches
   const [
@@ -44,40 +81,40 @@ export default async function GrowthPage() {
     supabase
       .from("case_studies")
       .select("id, title, slug, summary, status, created_at, published_at")
-      .eq("account_id", account.id)
+      .eq("account_id", accountId)
       .order("created_at", { ascending: false })
-      .limit(20),
+      .limit(20) as unknown as { data: CaseStudyData[] | null },
 
     supabase
       .from("social_posts")
       .select("platform, created_at")
-      .eq("account_id", account.id)
-      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+      .eq("account_id", accountId)
+      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) as unknown as { data: SocialPost[] | null },
 
     supabase
       .from("referral_codes")
       .select("code, uses, credits_earned")
-      .eq("account_id", account.id)
-      .single(),
+      .eq("account_id", accountId)
+      .single() as unknown as { data: ReferralData | null },
 
     supabase
       .from("viral_events_log")
       .select("event_type, created_at, milestone_amount")
-      .eq("account_id", account.id)
+      .eq("account_id", accountId)
       .order("created_at", { ascending: false }),
 
     supabase
       .from("social_group_targets")
       .select("platform, group_name, last_posted_at, total_posts, active")
-      .eq("account_id", account.id)
+      .eq("account_id", accountId)
       .eq("active", true),
   ]);
 
-  const caseStudies = (caseStudiesRes as any).value?.data ?? [];
-  const socialPosts = (socialPostsRes as any).value?.data ?? [];
-  const referral = (referralRes as any).value?.data;
-  const milestones = (milestonesRes as any).value?.data ?? [];
-  const socialGroups = (socialGroupsRes as any).value?.data ?? [];
+  const caseStudies = caseStudiesRes.status === "fulfilled" ? caseStudiesRes.value.data ?? [] : [];
+  const socialPosts = socialPostsRes.status === "fulfilled" ? socialPostsRes.value.data ?? [] : [];
+  const referral = referralRes.status === "fulfilled" ? referralRes.value.data : undefined;
+  const milestones = milestonesRes.status === "fulfilled" ? milestonesRes.value.data ?? [] : [];
+  const socialGroups = socialGroupsRes.status === "fulfilled" ? socialGroupsRes.value.data ?? [] : [];
 
   // Platform breakdown
   const platformCounts: Record<string, number> = {};
@@ -90,7 +127,7 @@ export default async function GrowthPage() {
     : null;
 
   const totalPostsAllTime = socialGroups.reduce(
-    (sum: number, g: { total_posts: number }) => sum + (g.total_posts || 0),
+    (sum: number, g: SocialGroup) => sum + (g.total_posts || 0),
     0
   );
 
@@ -109,7 +146,7 @@ export default async function GrowthPage() {
         <StatCard
           label="Case Studies"
           value={caseStudies.length}
-          sub={`${caseStudies.filter((c: { status: string }) => c.status === "published").length} published`}
+          sub={`${caseStudies.filter((c: CaseStudyData) => c.status === "published").length} published`}
           color="orange"
         />
         <StatCard
@@ -153,7 +190,7 @@ export default async function GrowthPage() {
                 Auto-generated from completed jobs
               </span>
             </div>
-            <CaseStudyList caseStudies={caseStudies} accountId={account.id} />
+            <CaseStudyList caseStudies={caseStudies as unknown as Parameters<typeof CaseStudyList>[0]["caseStudies"]} _accountId={accountId} />
           </div>
         </div>
 
@@ -167,7 +204,7 @@ export default async function GrowthPage() {
             <SocialActivityChart platformCounts={platformCounts} />
 
             <div className="mt-4 space-y-2">
-              {socialGroups.slice(0, 5).map((g: { platform: string; group_name: string; total_posts: number; last_posted_at: string | null }) => (
+              {socialGroups.slice(0, 5).map((g: SocialGroup) => (
                 <div key={g.group_name} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <PlatformDot platform={g.platform} />

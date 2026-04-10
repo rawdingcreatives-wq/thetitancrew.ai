@@ -1,0 +1,4 @@
+resend._domainkey.titancrew.ai. 1 IN TXT "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDsfO5mPw/MkDUpnKAOy0ZUM1oslk4Vex2yflnolnWDYINbak9y7k6/tH4PacA9wMgqGpaKeP+/pkMfZPPAp+qoVJbBqMZuF5No0Jc8zY6n3uhpeoIkar5bZ73mjo/cM83QSoJlUHjP99+2y8J7Gu+LpWLG7kFSVlfnnOgM/+k3xwIDAQAB"
+send.titancrew.ai. 1 IN MX 10 feedback-smtp.us-east-1.amazonses.com.
+send.titancrew.ai. 1 IN TXT "v=spf1 include:amazonses.com ~all"
+_dmarc.titancrew.ai. 1 IN TXT "v=DMARC1; p=none;"

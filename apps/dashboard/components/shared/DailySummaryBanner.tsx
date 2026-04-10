@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · DailySummaryBanner
  * Top-of-page greeting with the AI-generated daily summary.
@@ -37,7 +36,7 @@ export function DailySummaryBanner({ businessName, ownerName }: DailySummaryBann
     const fetchSummary = async () => {
       try {
         // Get latest foreman run output
-        const { data: runs } = await supabase
+        const { data: runs } = await (supabase as any)
           .from("agent_runs")
           .select("output_summary, created_at")
           .eq("trigger_event", "daily_morning_sweep")
@@ -45,7 +44,7 @@ export function DailySummaryBanner({ businessName, ownerName }: DailySummaryBann
           .order("created_at", { ascending: false })
           .limit(1);
 
-        if (runs && runs.length > 0 && runs[0].output_summary) {
+        if (runs && runs.length > 0 && runs[0]?.output_summary) {
           setSummary(runs[0].output_summary);
         }
       } catch (err) {
@@ -56,7 +55,7 @@ export function DailySummaryBanner({ businessName, ownerName }: DailySummaryBann
     };
 
     fetchSummary();
-  }, []);
+  }, [supabase]);
 
   const previewText = summary
     ? summary.length > 120 ? summary.slice(0, 120) + "..." : summary

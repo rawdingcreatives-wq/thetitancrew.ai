@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Stripe Customer Portal Route
  *
@@ -15,11 +14,19 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("billing-portal");
+
+interface Account {
+  id: string;
+  stripe_customer_id?: string;
+}
 
 const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY ?? "";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   if (!STRIPE_SECRET) {
     return NextResponse.json(
       { error: "Stripe not configured" },
@@ -41,9 +48,10 @@ export async function POST(req: NextRequest) {
     .from("accounts")
     .select("id, stripe_customer_id")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
 
-  if (!account?.stripe_customer_id) {
+  const accountTyped = account as Account | null;
+  if (!accountTyped?.stripe_customer_id) {
     return NextResponse.json(
       { error: "No billing account found. Please subscribe first." },
       { status: 400 }
@@ -53,7 +61,7 @@ export async function POST(req: NextRequest) {
   // ── Create Stripe Billing Portal session ─────────────────────
   try {
     const body = new URLSearchParams({
-      customer: account.stripe_customer_id,
+      customer: accountTyped.stripe_customer_id,
       return_url: `${APP_URL}/settings`,
     });
 
@@ -71,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     if (!res.ok) {
       const err = await res.json();
-      console.error("[Stripe Portal] Error:", err);
+      log.error({ event: "stripe_error", err: String(err) }, "Stripe error");
       return NextResponse.json(
         { error: "Failed to create billing portal session" },
         { status: 500 }
@@ -81,7 +89,7 @@ export async function POST(req: NextRequest) {
     const session = await res.json();
     return NextResponse.json({ url: session.url });
   } catch (err) {
-    console.error("[Stripe Portal] Exception:", err);
+    log.error({ event: "exception", err: String(err) }, "Exception");
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

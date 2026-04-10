@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew — CaseStudyList component
  * Shows generated case studies with publish toggles and copy buttons.
@@ -20,10 +19,10 @@ interface CaseStudy {
 
 interface Props {
   caseStudies: CaseStudy[];
-  accountId: string;
+  _accountId: string;
 }
 
-export default function CaseStudyList({ caseStudies, accountId }: Props) {
+export default function CaseStudyList({ caseStudies, _accountId }: Props) {
   const [studies, setStudies] = useState(caseStudies);
   const [publishing, setPublishing] = useState<string | null>(null);
 

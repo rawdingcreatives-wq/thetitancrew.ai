@@ -14,7 +14,11 @@
     "declarationMap": true,
     "sourceMap": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../../apps/dashboard/*"]
+    }
   },
   "include": ["src/**/*", "shared/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]

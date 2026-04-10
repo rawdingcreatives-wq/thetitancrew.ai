@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew — Billing Success Page
  *
@@ -20,8 +19,8 @@ import { createClient } from "@/lib/supabase/client";
 function BillingSuccessContent() {
   const router       = useRouter();
   const params       = useSearchParams();
-  const sessionId    = params.get("session_id");
-  const plan         = params.get("plan") ?? "basic";
+  const _sessionId    = params.get("session_id");
+  const plan         = params.get("plan") ?? "lite";
   const supabase     = createClient();
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -33,10 +32,10 @@ function BillingSuccessContent() {
         if (!user) { router.replace("/login"); return; }
 
         // Update plan in Supabase (webhook will also do this, but belt-and-suspenders)
-        await supabase
-          .from("accounts")
+        const updateResult = ((supabase.from("accounts") as any)
           .update({ plan })
-          .eq("owner_user_id", user.id);
+          .eq("owner_user_id", user.id)) as unknown as Promise<{ data: { plan: string } | null }>;
+        await updateResult;
 
         setStatus("ready");
 
@@ -46,9 +45,9 @@ function BillingSuccessContent() {
         setStatus("error");
       }
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan, router, supabase]);
 
-  const planLabel = plan === "pro" ? "Pro" : plan === "elite" ? "Elite" : "Basic";
+  const planLabel = plan === "growth" ? "Growth" : plan === "scale" ? "Scale" : "Lite";
 
   return (
     <div

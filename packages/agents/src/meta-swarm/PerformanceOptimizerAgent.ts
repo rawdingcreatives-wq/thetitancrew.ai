@@ -24,10 +24,9 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "../../apps/dashboard/lib/supabase/types";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-const supabase = createClient<Database>(
+const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
@@ -330,8 +329,7 @@ async function executeTool(
       const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
       const previousPeriodSince = new Date(Date.now() - daysBack * 2 * 24 * 60 * 60 * 1000).toISOString();
 
-      let query = supabase
-        .from("agent_runs")
+      let query = (supabase.from("agent_runs") as any)
         .select("agent_type, status, duration_ms, tokens_used, cost_usd, error_message, created_at, account_id")
         .gte("created_at", since);
 
@@ -341,31 +339,31 @@ async function executeTool(
       if (!runs) return { metrics: [] };
 
       // Aggregate by agent type
-      const grouped = runs.reduce<Record<string, typeof runs>>((acc, run) => {
-        if (!acc[run.agent_type]) acc[run.agent_type] = [];
-        acc[run.agent_type].push(run);
+      const grouped = ((runs as any).reduce((acc: any, run: any) => {
+        if (!acc[(run as any).agent_type]) acc[(run as any).agent_type] = [];
+        acc[(run as any).agent_type].push(run);
         return acc;
-      }, {});
+      }, {}) as any) as Record<string, any>;
 
       const metrics: AgentMetrics[] = [];
       for (const [agentType, agentRuns] of Object.entries(grouped)) {
-        if (agentRuns.length < minRuns) continue;
+        if ((agentRuns as any).length < minRuns) continue;
 
-        const successful = agentRuns.filter((r) => r.status === "completed");
-        const failed = agentRuns.filter((r) => r.status === "failed");
+        const successful = (agentRuns as any).filter((r: any) => (r as any).status === "completed");
+        const failed = (agentRuns as any).filter((r: any) => (r as any).status === "failed");
 
         metrics.push({
           agentType,
-          totalRuns: agentRuns.length,
-          successRate: Math.round((successful.length / agentRuns.length) * 100),
-          avgDurationMs: Math.round(agentRuns.reduce((s, r) => s + (r.duration_ms ?? 0), 0) / agentRuns.length),
-          avgTokensUsed: Math.round(agentRuns.reduce((s, r) => s + (r.tokens_used ?? 0), 0) / agentRuns.length),
+          totalRuns: (agentRuns as any).length,
+          successRate: Math.round((successful.length / (agentRuns as any).length) * 100),
+          avgDurationMs: Math.round((agentRuns as any).reduce((s: number, r: any) => s + ((r as any).duration_ms ?? 0), 0) / (agentRuns as any).length),
+          avgTokensUsed: Math.round((agentRuns as any).reduce((s: number, r: any) => s + ((r as any).tokens_used ?? 0), 0) / (agentRuns as any).length),
           avgCostUsd: parseFloat(
-            (agentRuns.reduce((s, r) => s + (r.cost_usd ?? 0), 0) / agentRuns.length).toFixed(4)
+            ((agentRuns as any).reduce((s: number, r: any) => s + ((r as any).cost_usd ?? 0), 0) / (agentRuns as any).length).toFixed(4)
           ),
-          failureReasons: [...new Set(failed.map((r) => r.error_message).filter(Boolean))] as string[],
+          failureReasons: [...new Set((failed as any).map((r: any) => (r as any).error_message).filter(Boolean))] as string[],
           hilTriggerRate: 0, // Would join with hil_confirmations
-          accountsAffected: new Set(agentRuns.map((r) => r.account_id)).size,
+          accountsAffected: new Set((agentRuns as any).map((r: any) => (r as any).account_id)).size,
           weekOverWeekChange: 0, // Would compare with previous period
         });
       }
@@ -401,8 +399,8 @@ async function executeTool(
       );
 
       if (!resp.ok) return { traces: [], error: `LangSmith API error: ${resp.status}` };
-      const data = await resp.json();
-      return { traces: data.runs ?? [], count: data.runs?.length ?? 0 };
+      const data = (await resp.json()) as any;
+      return { traces: (data as any).runs ?? [], count: (data as any).runs?.length ?? 0 };
     }
 
     case "analyze_failure_patterns": {
@@ -492,8 +490,7 @@ Generate an improved version of this system prompt that addresses the failure pa
           trafficPercent?: number;
         };
 
-      const { data, error } = await supabase
-        .from("prompt_variants")
+      const { data, error } = await (supabase.from("prompt_variants") as any)
         .insert({
           agent_type: agentType,
           variant_name: variantName,
@@ -539,8 +536,7 @@ Generate an improved version of this system prompt that addresses the failure pa
       const variantSuccessRate = variant.runs_count > 0 ? (variant.success_count / variant.runs_count) * 100 : 0;
 
       // Get control performance
-      const { data: control } = await supabase
-        .from("prompt_variants")
+      const { data: control } = await (supabase.from("prompt_variants") as any)
         .select("runs_count, success_count")
         .eq("agent_type", agentType)
         .eq("is_control", true)
@@ -620,8 +616,7 @@ Generate an improved version of this system prompt that addresses the failure pa
 
       const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
 
-      const { data: costData } = await supabase
-        .from("agent_runs")
+      const { data: costData } = await (supabase.from("agent_runs") as any)
         .select("account_id, agent_type, cost_usd, created_at")
         .gte("created_at", since);
 
@@ -638,45 +633,43 @@ Generate an improved version of this system prompt that addresses the failure pa
 
       // Get account plans for budget comparison
       const accountIds = Object.keys(byAccount);
-      const { data: accounts } = await supabase
-        .from("accounts")
+      const { data: accounts } = await (supabase.from("accounts") as any)
         .select("id, plan, business_name")
         .in("id", accountIds);
 
-      const MONTHLY_BUDGETS: Record<string, number> = { basic: 8, pro: 15 };
+      const MONTHLY_BUDGETS: Record<string, number> = { lite: 8, growth: 15, scale: 25 };
       const dailyBudgetFraction = daysBack / 30;
 
-      const flagged = (accounts ?? [])
-        .map((acct) => {
-          const spend = byAccount[acct.id]?.total ?? 0;
-          const budget = MONTHLY_BUDGETS[acct.plan ?? "basic"] ?? 8;
+      const flagged = ((accounts as any) ?? [])
+        .map((acct: any) => {
+          const spend = (byAccount as any)[(acct as any).id]?.total ?? 0;
+          const budget = MONTHLY_BUDGETS[(acct as any).plan ?? "lite"] ?? 8;
           const periodBudget = budget * dailyBudgetFraction;
           const pctUsed = Math.round((spend / periodBudget) * 100);
-          return { accountId: acct.id, businessName: acct.business_name, plan: acct.plan, spend, pctUsed };
+          return { accountId: (acct as any).id, businessName: (acct as any).business_name, plan: (acct as any).plan, spend, pctUsed };
         })
-        .filter((a) => a.pctUsed > flagThresholdPercent)
-        .sort((a, b) => b.pctUsed - a.pctUsed);
+        .filter((a: any) => a.pctUsed > flagThresholdPercent)
+        .sort((a: any, b: any) => b.pctUsed - a.pctUsed);
 
-      const totalSpend = costData.reduce((s, r) => s + (r.cost_usd ?? 0), 0);
+      const totalSpend = ((costData as any) ?? []).reduce((s: number, r: any) => s + ((r as any).cost_usd ?? 0), 0);
       return { flagged, totalSpend: parseFloat(totalSpend.toFixed(2)), daysAnalyzed: daysBack };
     }
 
     case "recommend_model_downgrades": {
       const { agentType } = toolInput as { agentType: string };
 
-      const { data: runs } = await supabase
-        .from("agent_runs")
+      const { data: runs } = await (supabase.from("agent_runs") as any)
         .select("agent_type, tokens_used, cost_usd, status, output_summary")
         .eq("agent_type", agentType)
         .eq("status", "completed")
         .gte("created_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
         .limit(50);
 
-      if (!runs || runs.length < 10) {
+      if (!(runs as any) || (runs as any).length < 10) {
         return { recommendation: "insufficient_data", agentType };
       }
 
-      const avgTokens = runs.reduce((s, r) => s + (r.tokens_used ?? 0), 0) / runs.length;
+      const avgTokens = ((runs as any) ?? []).reduce((s: number, r: any) => s + ((r as any).tokens_used ?? 0), 0) / ((runs as any) ?? []).length;
       const LOW_COMPLEXITY_THRESHOLD = 1500;
 
       return {

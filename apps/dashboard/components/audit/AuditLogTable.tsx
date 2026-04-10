@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 /**
@@ -10,10 +9,17 @@
 import { useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { timeAgo, agentLabel } from "@/lib/utils";
-import { CheckCircle2, XCircle, Clock, Info, AlertTriangle, ChevronLeft, ChevronRight, HelpCircle } from "lucide-react";
-import type { Database } from "@/lib/supabase/types";
+import { CheckCircle2, Clock, Info, AlertTriangle, ChevronLeft, ChevronRight, HelpCircle } from "lucide-react";
+import type { ReactNode } from "react";
 
-type AuditEntry = Database["public"]["Tables"]["audit_log"]["Row"];
+interface AuditEntry {
+  id: string;
+  account_id: string;
+  actor: string;
+  event_type: string;
+  created_at: string;
+  details: Record<string, unknown>;
+}
 
 interface AuditLogTableProps {
   entries: AuditEntry[];
@@ -168,12 +174,12 @@ export function AuditLogTable({
                       <span className="text-lg leading-none">{getEventIcon(entry.event_type ?? "")}</span>
                       <div>
                         <div className="font-medium text-[#1A2744]">{getEventLabel(entry.event_type ?? "")}</div>
-                        {details?.jobId && (
+                        {(details && "jobId" in details && details.jobId && (
                           <div className="text-xs text-gray-400">Job: {String(details.jobId).slice(0, 12)}…</div>
-                        )}
-                        {details?.totalAmount && (
+                        )) as unknown as ReactNode}
+                        {(details && "totalAmount" in details && details.totalAmount && (
                           <div className="text-xs text-gray-500">${Number(details.totalAmount).toLocaleString()}</div>
-                        )}
+                        )) as unknown as ReactNode}
                         <AuditRowDetail entry={entry} />
                       </div>
                     </div>

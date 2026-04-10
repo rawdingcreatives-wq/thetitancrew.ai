@@ -4,6 +4,10 @@
  * Falls back to email PO if API is unavailable.
  */
 
+import { createLogger } from "../guardrails/logger";
+
+const logger = createLogger("suppliers");
+
 export interface PartSearchResult {
   sku: string;
   name: string;
@@ -67,7 +71,7 @@ export class FergusonTool {
         productUrl: `https://www.ferguson.com/product/${p.sku}`,
       }));
     } catch (err) {
-      console.error("[Ferguson] Search failed:", err);
+      logger.error({ error: err }, "Ferguson search failed");
       return [];
     }
   }
@@ -137,7 +141,7 @@ export class FergusonTool {
     originalError: string
   ): Promise<SupplierOrderResult> {
     // Would send an email PO via SendGrid in production
-    console.error("[Ferguson] API failed, email PO fallback triggered:", originalError);
+    logger.error({ event: "ferguson_email_fallback", err: originalError }, "Ferguson API failed, email PO fallback triggered");
     return {
       success: false,
       error: originalError,
@@ -195,7 +199,7 @@ export class GraingerTool {
         productUrl: `https://www.grainger.com/product/${p.itemNumber}`,
       }));
     } catch (err) {
-      console.error("[Grainger] Search failed:", err);
+      logger.error({ error: err }, "Grainger search failed");
       return [];
     }
   }

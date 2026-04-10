@@ -21,6 +21,9 @@ import { createClient } from "@supabase/supabase-js";
 import { AuditLogger } from "../../guardrails/AuditLogger";
 import { LiabilityFilter } from "../../guardrails/LiabilityFilter";
 import { HILGate } from "../../base/HILGate";
+import { createLogger } from "../../guardrails/logger";
+
+const logger = createLogger("QuickBooksAdapter");
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -101,7 +104,7 @@ interface QBOTokens {
 }
 
 async function getQBOTokens(accountId: string): Promise<QBOTokens | null> {
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from("accounts")
     .select("qbo_access_token, qbo_refresh_token, qbo_realm_id, qbo_token_expires_at")
     .eq("id", accountId)
@@ -143,15 +146,15 @@ async function refreshQBOToken(refreshToken: string, accountId: string): Promise
   });
 
   if (!resp.ok) {
-    console.error("[QBO] Token refresh failed:", resp.status);
+    logger.error({ status: resp.status }, "Token refresh failed");
     return null;
   }
 
-  const data = await resp.json();
+  const data = (await resp.json()) as Record<string, any>;
   const expiresAt = Date.now() + data.expires_in * 1000;
 
   // Get realm ID from existing record
-  const { data: account } = await supabase
+  const { data: account } = await (supabase as any)
     .from("accounts")
     .select("qbo_realm_id")
     .eq("id", accountId)
@@ -211,7 +214,7 @@ export class QuickBooksAdapter {
   private readonly RETRY_MAX = 3;
 
   constructor(private accountId: string) {
-    this.auditLogger = new AuditLogger(supabase, accountId);
+    this.auditLogger = new AuditLogger(supabase);
     this.liabilityFilter = new LiabilityFilter();
     this.hilGate = new HILGate(supabase, accountId);
   }
@@ -242,7 +245,7 @@ export class QuickBooksAdapter {
       const searchResult = await this.withRetry(
         () => qboRequest<{ QueryResponse: { Customer?: Array<{ Id: string }> } }>(
           tokens,
-          "GET",
+          "GET" as any,
           `query?query=SELECT * FROM Customer WHERE PrimaryEmailAddr = '${customer.email}'&minorversion=65`
         ),
         "customer search"
@@ -251,8 +254,11 @@ export class QuickBooksAdapter {
       const existing = searchResult.QueryResponse?.Customer?.[0];
       if (existing) {
         await this.auditLogger.log({
-          eventType: "qbo.customer_found",
-          details: { email: customer.email, qboId: existing.Id },
+          accountId: this.accountId,
+          action: "qbo.customer_found",
+          entityType: "customer",
+          entityId: existing.Id,
+          metadata: { email: customer.email, qboId: existing.Id },
         });
         return { qboId: existing.Id, isNew: false };
       }
@@ -274,13 +280,16 @@ export class QuickBooksAdapter {
     };
 
     const result = await this.withRetry(
-      () => qboRequest<{ Customer: { Id: string } }>(tokens, "POST", "customer?minorversion=65", qboCustomer),
+      () => qboRequest<{ Customer: { Id: string } }>(tokens, "POST" as any, "customer?minorversion=65", qboCustomer),
       "create customer"
     );
 
     await this.auditLogger.log({
-      eventType: "qbo.customer_created",
-      details: { displayName: customer.displayName, qboId: result.Customer.Id },
+      accountId: this.accountId,
+      action: "qbo.customer_created",
+      entityType: "customer",
+      entityId: result.Customer.Id,
+      metadata: { displayName: customer.displayName, qboId: result.Customer.Id },
     });
 
     return { qboId: result.Customer.Id, isNew: true };
@@ -299,7 +308,7 @@ export class QuickBooksAdapter {
     const totalAmount = invoice.lineItems.reduce((s, item) => s + item.amount, 0);
 
     // Liability check
-    const liabilityCheck = this.liabilityFilter.check({
+    const liabilityCheck = this.liabilityFilter.check("qbo_create_invoice", {
       action: "qbo_create_invoice",
       estimatedValue: totalAmount,
       details: { customerName: invoice.customerName, jobId: invoice.jobId },
@@ -309,10 +318,12 @@ export class QuickBooksAdapter {
     // HIL for large invoices
     if (totalAmount > 2000) {
       const approved = await this.hilGate.requestConfirmation({
+        accountId: this.accountId,
         actionType: "qbo_create_invoice",
+        riskLevel: "high",
         description: `Create invoice for ${invoice.customerName} — $${totalAmount.toLocaleString()} — Job: ${invoice.jobId}`,
-        estimatedValue: totalAmount,
-        metadata: { jobId: invoice.jobId, customerName: invoice.customerName },
+        amount: totalAmount,
+        payload: { jobId: invoice.jobId, customerName: invoice.customerName },
       });
       if (!approved) throw new Error("HIL: Invoice creation rejected by owner");
     }
@@ -393,8 +404,11 @@ export class QuickBooksAdapter {
     }).eq("id", invoice.jobId).eq("account_id", this.accountId);
 
     await this.auditLogger.log({
-      eventType: "qbo.invoice_created",
-      details: {
+      accountId: this.accountId,
+      action: "qbo.invoice_created",
+      entityType: "invoice",
+      entityId: invoice.jobId,
+      metadata: {
         qboInvoiceId,
         invoiceNumber,
         totalAmount,
@@ -414,7 +428,7 @@ export class QuickBooksAdapter {
     if (!tokens) return [];
 
     // Fetch QBO invoice IDs from DB
-    const { data: jobs } = await supabase
+    const { data: jobs } = await (supabase as any)
       .from("jobs")
       .select("id, qbo_invoice_id, invoice_amount, scheduled_end")
       .in("id", jobIds)
@@ -461,7 +475,7 @@ export class QuickBooksAdapter {
           daysPastDue: daysPastDue > 0 ? daysPastDue : undefined,
         });
       } catch (err) {
-        console.warn(`[QBO] Failed to get status for invoice ${job.qbo_invoice_id}:`, err);
+        logger.warn({ invoiceId: job.qbo_invoice_id, error: err }, "Failed to get status for invoice");
       }
     }
 
@@ -517,9 +531,11 @@ export class QuickBooksAdapter {
    */
   async voidInvoice(qboInvoiceId: string, reason: string): Promise<void> {
     const approved = await this.hilGate.requestConfirmation({
+      accountId: this.accountId,
       actionType: "qbo_void_invoice",
+      riskLevel: "medium",
       description: `Void QBO invoice ${qboInvoiceId} — Reason: ${reason}`,
-      metadata: { qboInvoiceId, reason },
+      payload: { qboInvoiceId, reason },
     });
     if (!approved) throw new Error("HIL: Invoice void rejected by owner");
 
@@ -535,8 +551,11 @@ export class QuickBooksAdapter {
     );
 
     await this.auditLogger.log({
-      eventType: "qbo.invoice_voided",
-      details: { qboInvoiceId, reason },
+      accountId: this.accountId,
+      action: "qbo.invoice_voided",
+      entityType: "invoice",
+      entityId: qboInvoiceId,
+      metadata: { qboInvoiceId, reason },
     });
   }
 
@@ -662,7 +681,7 @@ export async function exchangeQBOCode(
     }).toString(),
   });
 
-  const data = await resp.json();
+  const data = (await resp.json()) as Record<string, any>;
   if (!resp.ok) return { success: false };
 
   await supabase.from("accounts").update({

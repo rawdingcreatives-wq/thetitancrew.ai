@@ -118,8 +118,7 @@ NEVER:
         if (!calResult.success) return { success: false, error: calResult.error };
 
         // 2. Update job record in DB
-        await this.supabase
-          .from("jobs")
+        await (this.supabase.from("jobs") as any)
           .update({
             status: "scheduled",
             technician_id: input.technician_id as string,
@@ -169,8 +168,7 @@ NEVER:
       },
       riskLevel: "low",
       handler: async (input) => {
-        const { data } = await this.supabase
-          .from("jobs")
+        const { data } = await (this.supabase.from("jobs") as any)
           .select("id, title, job_type, priority, customer_id, address, estimate_amount, notes, created_at")
           .eq("account_id", this.config.accountId)
           .eq("status", "lead")
@@ -188,8 +186,7 @@ NEVER:
       inputSchema: { type: "object", properties: {} },
       riskLevel: "low",
       handler: async () => {
-        const { data } = await this.supabase
-          .from("technicians")
+        const { data } = await (this.supabase.from("technicians") as any)
           .select("id, name, phone, skill_tags, efficiency_score, calendar_id")
           .eq("account_id", this.config.accountId)
           .eq("is_active", true);
@@ -229,8 +226,7 @@ NEVER:
         );
 
         // Update DB
-        await this.supabase
-          .from("jobs")
+        await (this.supabase.from("jobs") as any)
           .update({
             scheduled_start: input.new_start_time as string,
             scheduled_end: input.new_end_time as string,
@@ -270,8 +266,7 @@ NEVER:
       },
       riskLevel: "low",
       handler: async (input, ctx) => {
-        const { data: account } = await this.supabase
-          .from("accounts")
+        const { data: account } = await (this.supabase.from("accounts") as any)
           .select("phone, notification_prefs")
           .eq("id", this.config.accountId)
           .single();
@@ -357,8 +352,7 @@ Payload: ${JSON.stringify(ctx.payload ?? {})}
   // ─── Private helpers ──────────────────────────────────────
 
   private async getTechName(technicianId: string): Promise<string> {
-    const { data } = await this.supabase
-      .from("technicians")
+    const { data } = await (this.supabase.from("technicians") as any)
       .select("name")
       .eq("id", technicianId)
       .single();
@@ -366,8 +360,7 @@ Payload: ${JSON.stringify(ctx.payload ?? {})}
   }
 
   private async getBusinessName(): Promise<string> {
-    const { data } = await this.supabase
-      .from("accounts")
+    const { data } = await (this.supabase.from("accounts") as any)
       .select("business_name")
       .eq("id", this.config.accountId)
       .single();

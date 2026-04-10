@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · IntegrationHealthBar
  * Visual bar showing integration completeness and agent readiness.

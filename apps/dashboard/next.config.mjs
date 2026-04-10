@@ -1,14 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     transpilePackages: ["@titancrew/agents", "@titancrew/shared"],
-    // TODO: Remove these suppressions once @ts-nocheck is removed from all files
-    // and TypeScript/ESLint errors are properly resolved across the codebase.
-    typescript: {
-          ignoreBuildErrors: true,
-    },
-    eslint: {
-          ignoreDuringBuilds: true,
-    },
     async headers() {
           return [
             {

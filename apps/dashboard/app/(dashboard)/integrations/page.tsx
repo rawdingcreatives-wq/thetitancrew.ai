@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew Dashboard — /integrations
  *
@@ -17,7 +16,7 @@ import { redirect } from "next/navigation";
 import { IntegrationCard } from "@/components/integrations/IntegrationCard";
 import { A2PRegistrationPanel } from "@/components/integrations/A2PRegistrationPanel";
 import { IntegrationHealthBar } from "@/components/integrations/IntegrationHealthBar";
-import { CheckCircle2, XCircle, AlertCircle, ExternalLink } from "lucide-react";
+import { CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
 
 export const metadata = { title: "Integrations — TitanCrew" };
 
@@ -31,6 +30,20 @@ interface IntegrationStatus {
   twilio: { a2pRegistered: boolean; phoneNumber?: string };
 }
 
+interface Account {
+  id: string;
+  plan: string;
+  trade_type: string;
+  google_calendar_token: string | null;
+  google_calendar_id: string | null;
+  google_connected_at: string | null;
+  qbo_access_token: string | null;
+  qbo_realm_id: string | null;
+  qbo_connected_at: string | null;
+  twilio_a2p_registered: boolean;
+  twilio_phone_number: string | null;
+}
+
 // ─── Page ─────────────────────────────────────────────────
 
 export default async function IntegrationsPage() {
@@ -38,8 +51,7 @@ export default async function IntegrationsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select(`
       id, plan, trade_type,
       google_calendar_token, google_calendar_id, google_connected_at,
@@ -47,26 +59,26 @@ export default async function IntegrationsPage() {
       twilio_a2p_registered, twilio_phone_number
     `)
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
 
   if (!account) redirect("/onboarding");
 
   const status: IntegrationStatus = {
     googleCalendar: {
       connected: !!account.google_calendar_token,
-      connectedAt: account.google_connected_at,
-      calendarId: account.google_calendar_id,
+      connectedAt: account.google_connected_at ?? undefined,
+      calendarId: account.google_calendar_id ?? undefined,
     },
     quickbooks: {
       connected: !!account.qbo_access_token,
-      connectedAt: account.qbo_connected_at,
-      realmId: account.qbo_realm_id,
+      connectedAt: account.qbo_connected_at ?? undefined,
+      realmId: account.qbo_realm_id ?? undefined,
     },
     ferguson: { enabled: !!process.env.FERGUSON_API_KEY },
     grainger: { enabled: !!process.env.GRAINGER_API_KEY },
     twilio: {
       a2pRegistered: !!account.twilio_a2p_registered,
-      phoneNumber: account.twilio_phone_number,
+      phoneNumber: account.twilio_phone_number ?? undefined,
     },
   };
 
@@ -114,15 +126,15 @@ export default async function IntegrationsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Google Calendar */}
         <IntegrationCard
-          id="google_calendar"
+          _id="google_calendar"
           name="Google Calendar"
           description="Two-way sync for job scheduling. Agents read availability and book jobs directly to your calendar."
           logoSrc="/logos/google-calendar.svg"
           connected={status.googleCalendar.connected}
-          connectedAt={status.googleCalendar.connectedAt}
+          connectedAt={status.googleCalendar.connectedAt ?? undefined}
           connectedDetail={status.googleCalendar.calendarId ? `Calendar: ${status.googleCalendar.calendarId}` : undefined}
-          connectUrl={`/api/integrations/google-calendar/start?accountId=${account.id}`}
-          disconnectUrl={`/api/integrations/google-calendar/disconnect`}
+          connectUrl={`/api/integrations/google-calendar?action=start&accountId=${account.id}`}
+          disconnectUrl={`/api/integrations/google-calendar?action=disconnect`}
           features={[
             "Read technician availability (freebusy)",
             "Auto-create job events with customer details",
@@ -136,15 +148,15 @@ export default async function IntegrationsPage() {
 
         {/* QuickBooks Online */}
         <IntegrationCard
-          id="quickbooks"
+          _id="quickbooks"
           name="QuickBooks Online"
           description="Create, send, and track invoices automatically. Sync customers and pull revenue reports."
           logoSrc="/logos/quickbooks.svg"
           connected={status.quickbooks.connected}
-          connectedAt={status.quickbooks.connectedAt}
+          connectedAt={status.quickbooks.connectedAt ?? undefined}
           connectedDetail={status.quickbooks.realmId ? `Company ID: ${status.quickbooks.realmId}` : undefined}
-          connectUrl={`/api/integrations/quickbooks/start?accountId=${account.id}`}
-          disconnectUrl={`/api/integrations/quickbooks/disconnect`}
+          connectUrl={`/api/integrations/quickbooks?action=start&accountId=${account.id}`}
+          disconnectUrl={`/api/integrations/quickbooks?action=disconnect`}
           features={[
             "Auto-create invoices from completed jobs",
             "Send invoices directly to customers",
@@ -158,7 +170,7 @@ export default async function IntegrationsPage() {
 
         {/* Ferguson */}
         <IntegrationCard
-          id="ferguson"
+          _id="ferguson"
           name="Ferguson"
           description="Search parts, compare prices, and create purchase orders for plumbing, HVAC, and waterworks supplies."
           logoSrc="/logos/ferguson.svg"
@@ -178,7 +190,7 @@ export default async function IntegrationsPage() {
 
         {/* Grainger */}
         <IntegrationCard
-          id="grainger"
+          _id="grainger"
           name="Grainger"
           description="Industrial MRO and HVAC/electrical supplies. Automatically compared against Ferguson for best pricing."
           logoSrc="/logos/grainger.svg"
@@ -202,7 +214,7 @@ export default async function IntegrationsPage() {
         accountId={account.id}
         isRegistered={status.twilio.a2pRegistered}
         phoneNumber={status.twilio.phoneNumber}
-        tradeType={account.trade_type}
+        _tradeType={account.trade_type}
       />
 
       {/* OAuth Callback Info */}

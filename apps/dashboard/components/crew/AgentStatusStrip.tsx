@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · AgentStatusStrip
  * Compact card showing all 5-6 agents and their live status.
@@ -10,7 +9,7 @@
 import Link from "next/link";
 import {
   Calendar, Package, MessageSquare, DollarSign,
-  Cpu, Truck, Bot, AlertTriangle, Clock, Zap,
+  Cpu, Truck, Bot, AlertTriangle, Zap,
 } from "lucide-react";
 import type { AgentType, AgentStatus } from "@/lib/supabase/types";
 
@@ -100,7 +99,7 @@ export function AgentStatusStrip({ agents }: AgentStatusStripProps) {
           const statusStyle = STATUS_STYLES[agent.status];
           const Icon = meta.icon;
 
-          const lastRunLabel = agent.last_run_at
+          const _lastRunLabel = agent.last_run_at
             ? (() => {
                 const diff = Date.now() - new Date(agent.last_run_at).getTime();
                 const mins = Math.floor(diff / 60000);

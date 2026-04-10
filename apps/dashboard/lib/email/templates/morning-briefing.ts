@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Morning Briefing Email Template
  *

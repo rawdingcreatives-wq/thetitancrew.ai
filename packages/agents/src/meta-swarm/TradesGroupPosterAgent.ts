@@ -22,8 +22,11 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+// @ts-ignore
 import { createServiceClient } from "@/lib/supabase/service";
+// @ts-ignore
 import { auditLog } from "@titancrew/agents/src/guardrails/AuditLogger";
+import { createLogger } from "../guardrails/logger";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -154,6 +157,7 @@ export async function runTradesGroupPosterAgent(
   const client = new Anthropic();
   const results: PostResult[] = [];
   const today = new Date().toISOString().split("T")[0];
+  const postLog = createLogger("TradesGroupPosterAgent");
 
   await auditLog({
     accountId: ctx.accountId,
@@ -163,15 +167,14 @@ export async function runTradesGroupPosterAgent(
   });
 
   // ── 1. Get target groups for this account ──────────────────
-  const { data: groups } = await supabase
-    .from("social_group_targets")
+  const { data: groups } = await (supabase.from("social_group_targets") as any)
     .select("*")
     .eq("account_id", ctx.accountId)
     .eq("active", true)
     .order("last_posted_at", { ascending: true, nullsFirst: true });
 
   if (!groups || groups.length === 0) {
-    console.log(`[TradesPoster] No groups configured for account ${ctx.accountId}`);
+    postLog.info({ accountId: ctx.accountId }, "No groups configured");
 
     // Auto-seed default groups based on trade type + city
     await seedDefaultGroups(ctx.accountId, ctx.tradeType, ctx.city, ctx.state);
@@ -179,8 +182,7 @@ export async function runTradesGroupPosterAgent(
   }
 
   // ── 2. Get today's post count per platform ─────────────────
-  const { data: todaysPosts } = await supabase
-    .from("social_posts")
+  const { data: todaysPosts } = await (supabase.from("social_posts") as any)
     .select("platform")
     .eq("account_id", ctx.accountId)
     .gte("created_at", `${today}T00:00:00Z`);
@@ -213,7 +215,7 @@ export async function runTradesGroupPosterAgent(
   });
 
   if (eligibleGroups.length === 0) {
-    console.log(`[TradesPoster] All groups at rate limit or on cooldown for account ${ctx.accountId}`);
+    postLog.info({ accountId: ctx.accountId }, "All groups at rate limit or on cooldown");
     return results;
   }
 
@@ -246,8 +248,7 @@ export async function runTradesGroupPosterAgent(
 
       if (postResult.success) {
         // Update group metadata
-        await supabase
-          .from("social_group_targets")
+        await (supabase.from("social_group_targets") as any)
           .update({
             last_posted_at: result.postedAt,
             total_posts: (group.totalPosts || 0) + 1,
@@ -287,7 +288,7 @@ export async function runTradesGroupPosterAgent(
       // Rate-limit API calls
       await delay(1500);
     } catch (err) {
-      console.error(`[TradesPoster] Failed to post to ${group.groupName}:`, err);
+      postLog.error({ accountId: ctx.accountId, groupName: group.groupName, platform: group.platform, error: String(err) }, "Failed to post to group");
     }
   }
 
@@ -444,7 +445,8 @@ async function seedDefaultGroups(
   }));
 
   await supabase.from("social_group_targets").upsert(rows, { onConflict: "account_id,group_id" });
-  console.log(`[TradesPoster] Seeded ${rows.length} default groups for account ${accountId}`);
+  const seedLog = createLogger("TradesGroupPosterAgent");
+  seedLog.info({ accountId, groupCount: rows.length }, "Seeded default groups");
 }
 
 // ─── Platform posting (stub / Apify in prod) ──────────────────
@@ -471,7 +473,13 @@ async function simulateOrPostToGroup(
 
   if (!hasIntegration) {
     // Dev mode: log and mark as success for queue
-    console.log(`[TradesPoster][${group.platform}] Would post to "${group.groupName}":\n${content.slice(0, 100)}...`);
+    const simLog = createLogger("TradesGroupPosterAgent");
+    simLog.info({
+      accountId,
+      platform: group.platform,
+      groupName: group.groupName,
+      contentPreview: content.slice(0, 100)
+    }, "Would post to group (dry run)");
     return { success: true, postId: `sim_${Date.now()}` };
   }
 

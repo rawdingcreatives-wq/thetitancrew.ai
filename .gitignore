@@ -21,6 +21,8 @@ dist
 *.log
 .vercel
 .railway
+.fuse_hidden*
+_tmp_*
 
 # Supabase local dev
 supabase/.branches

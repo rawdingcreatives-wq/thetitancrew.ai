@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · IntegrationCard
  * Shows connection status, connect/disconnect button, features, and agent dependencies.
@@ -6,11 +5,12 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { CheckCircle2, XCircle, ExternalLink, Lock, Check, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface IntegrationCardProps {
-  id: string;
+  _id?: string;
   name: string;
   description: string;
   logoSrc?: string;
@@ -26,7 +26,7 @@ interface IntegrationCardProps {
 }
 
 export function IntegrationCard({
-  id, name, description, logoSrc, connected, connectedAt, connectedDetail,
+  _id, name, description, logoSrc, connected, connectedAt, connectedDetail,
   connectUrl, disconnectUrl, features, requiredFor = [], docUrl, isAdminManaged,
 }: IntegrationCardProps) {
   const router = useRouter();
@@ -63,7 +63,7 @@ export function IntegrationCard({
             connected ? "bg-emerald-50 border border-emerald-100" : "bg-slate-100 border border-slate-200"
           }`}>
             {logoSrc ? (
-              <img src={logoSrc} alt={name} className="w-7 h-7 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              <Image src={logoSrc} alt={name} width={28} height={28} className="object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
             ) : (
               name.slice(0, 2)
             )}

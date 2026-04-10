@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Onboarding Progress Checklist
  * Fixed bottom-right widget visible on all dashboard pages until onboarding is complete.

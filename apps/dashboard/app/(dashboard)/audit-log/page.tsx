@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew Dashboard — /audit-log
  *
@@ -19,11 +18,27 @@ import { AuditLogTable } from "@/components/audit/AuditLogTable";
 import { AuditLogFilters } from "@/components/audit/AuditLogFilters";
 import { AuditLogSummary } from "@/components/audit/AuditLogSummary";
 import { Shield, Download, Lock } from "lucide-react";
-import type { Database } from "@/lib/supabase/types";
+
+interface Account {
+  id: string;
+  business_name: string;
+}
+
+interface AuditEntry {
+  id: string;
+  account_id: string;
+  actor: string;
+  event_type: string;
+  created_at: string;
+  details: Record<string, unknown>;
+}
+
+interface AuditStat {
+  event_type: string;
+  actor: string;
+}
 
 export const metadata = { title: "Audit Log - TitanCrew" };
-
-type AuditEntry = Database["public"]["Tables"]["audit_log"]["Row"];
 
 export default async function AuditLogPage({
   searchParams,
@@ -41,11 +56,10 @@ export default async function AuditLogPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select("id, business_name")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
 
   if (!account) redirect("/onboarding");
 
@@ -53,38 +67,36 @@ export default async function AuditLogPage({
   const page = parseInt(params.page ?? "1");
   const offset = (page - 1) * PAGE_SIZE;
 
-  let query = supabase
-    .from("audit_log")
+  let baseQuery = supabase.from("audit_log")
     .select("*", { count: "exact" })
-    .eq("account_id", account.id)
+    .eq("account_id", account.id);
+
+  if (params.agentType && params.agentType !== "all") {
+    baseQuery = baseQuery.eq("actor", params.agentType);
+  }
+  if (params.eventType && params.eventType !== "all") {
+    baseQuery = baseQuery.ilike("event_type", `${params.eventType}%`);
+  }
+  if (params.from) {
+    baseQuery = baseQuery.gte("created_at", new Date(params.from).toISOString());
+  }
+  if (params.to) {
+    baseQuery = baseQuery.lte("created_at", new Date(params.to + "T23:59:59").toISOString());
+  }
+
+  const { data: entries, count } = await baseQuery
     .order("created_at", { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1);
 
-  if (params.agentType && params.agentType !== "all") {
-    query = query.eq("actor", params.agentType);
-  }
-  if (params.eventType && params.eventType !== "all") {
-    query = query.ilike("event_type", `${params.eventType}%`);
-  }
-  if (params.from) {
-    query = query.gte("created_at", new Date(params.from).toISOString());
-  }
-  if (params.to) {
-    query = query.lte("created_at", new Date(params.to + "T23:59:59").toISOString());
-  }
-
-  const { data: entries, count } = await query;
-
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: recentStats } = await supabase
-    .from("audit_log")
+  const { data: recentStats } = await supabase.from("audit_log")
     .select("event_type, actor")
     .eq("account_id", account.id)
     .gte("created_at", thirtyDaysAgo);
 
   const totalActions = recentStats?.length ?? 0;
-  const uniqueAgents = new Set(recentStats?.map((r) => r.actor)).size;
-  const eventTypes = [...new Set(recentStats?.map((r) => r.event_type?.split(".")[0]))];
+  const uniqueAgents = new Set(recentStats?.map((r: AuditStat) => r.actor)).size;
+  const eventTypes: string[] = Array.from(new Set(recentStats?.map((r: AuditStat) => r.event_type?.split(".")[0])));
 
   return (
     <div className="space-y-6">
@@ -132,7 +144,7 @@ export default async function AuditLogPage({
           </span>
         </div>
         <AuditLogTable
-          entries={(entries as AuditEntry[]) ?? []}
+          entries={(entries ?? []) as AuditEntry[]}
           totalCount={count ?? 0}
           currentPage={page}
           pageSize={PAGE_SIZE}

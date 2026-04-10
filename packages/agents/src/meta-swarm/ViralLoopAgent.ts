@@ -19,10 +19,16 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+// @ts-ignore
 import { createServiceClient } from "@/lib/supabase/service";
+// @ts-ignore
 import { auditLog } from "@titancrew/agents/src/guardrails/AuditLogger";
+import { guardKillSwitch } from "../guardrails/kill-switches";
+import { createLogger } from "../guardrails/logger";
 import twilio from "twilio";
 import Stripe from "stripe";
+
+const viralLog = createLogger("ViralLoopAgent");
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -130,9 +136,8 @@ export async function runViralLoopAgent(event: ViralEvent): Promise<void> {
   });
 
   // Fetch account
-  const { data: account } = await supabase
-    .from("accounts")
-    .select("id, business_name, owner_name, owner_phone, owner_email, plan, stripe_customer_id, referral_code")
+  const { data: account } = await (supabase.from("accounts") as any)
+    .select("id, business_name, owner_name, phone, email, plan, stripe_customer_id, referral_code")
     .eq("id", event.accountId)
     .single();
 
@@ -143,8 +148,7 @@ export async function runViralLoopAgent(event: ViralEvent): Promise<void> {
     await ensureReferralCode(event.accountId, account);
   }
 
-  const { data: freshAccount } = await supabase
-    .from("accounts")
+  const { data: freshAccount } = await (supabase.from("accounts") as any)
     .select("referral_code")
     .eq("id", event.accountId)
     .single();
@@ -194,7 +198,7 @@ async function handleFirstJobCompleted(
     data: event.data,
   });
 
-  await sendViralSMS(account.owner_phone, message, account.id, "first_job_completed");
+  await sendViralSMS(account.phone, message, account.id, "first_job_completed");
 
   // Also send a share card via email (with referral link prominently displayed)
   await sendReferralEmail(account, referralUrl, "first_job", event.data);
@@ -224,7 +228,7 @@ async function handleRevenueMilestone(
     data: event.data,
   });
 
-  await sendViralSMS(account.owner_phone, message, account.id, "revenue_milestone");
+  await sendViralSMS(account.phone, message, account.id, "revenue_milestone");
   await sendReferralEmail(account, referralUrl, "revenue_milestone", { milestone, ...event.data });
 }
 
@@ -251,7 +255,7 @@ async function handleJobsMilestone(
     data: event.data,
   });
 
-  await sendViralSMS(account.owner_phone, message, account.id, "jobs_milestone");
+  await sendViralSMS(account.phone, message, account.id, "jobs_milestone");
 }
 
 async function handlePositiveReview(
@@ -269,12 +273,11 @@ async function handlePositiveReview(
     data: event.data, // { customerName, rating, reviewText }
   });
 
-  await sendViralSMS(account.owner_phone, message, account.id, "positive_review");
+  await sendViralSMS(account.phone, message, account.id, "positive_review");
 
   // Auto-share review content to social (with contractor's permission — checked in onboarding settings)
   const supabase = createServiceClient();
-  const { data: settings } = await supabase
-    .from("accounts")
+  const { data: settings } = await (supabase.from("accounts") as any)
     .select("auto_share_reviews")
     .eq("id", account.id)
     .single();
@@ -299,7 +302,7 @@ async function handleReferralConverted(
 
   const message = `🎉 Great news, ${account.owner_name}! ${event.data.newBusinessName} just activated TitanCrew using your referral. You've earned a $${REFERRAL_CREDIT_AMOUNT} credit on your account! Keep sharing: https://titancrew.ai/signup?ref=${account.referral_code}`;
 
-  await sendViralSMS(account.owner_phone, message, account.id, "referral_converted");
+  await sendViralSMS(account.phone, message, account.id, "referral_converted");
 
   // Update referral stats
   const supabase = createServiceClient();
@@ -335,7 +338,7 @@ async function handleTrialConverted(
     data: event.data,
   });
 
-  await sendViralSMS(account.owner_phone, message, account.id, "trial_converted");
+  await sendViralSMS(account.phone, message, account.id, "trial_converted");
 }
 
 async function handleAnniversary(
@@ -354,7 +357,7 @@ async function handleAnniversary(
     data: { ...event.data, yearsOnPlatform },
   });
 
-  await sendViralSMS(account.owner_phone, message, account.id, "anniversary");
+  await sendViralSMS(account.phone, message, account.id, "anniversary");
 
   // Apply loyalty credit for year anniversaries
   if (yearsOnPlatform >= 1) {
@@ -379,8 +382,7 @@ async function ensureReferralCode(accountId: string, account: Account): Promise<
   const suffix = Math.random().toString(36).slice(2, 5).toUpperCase();
   const code = `${base}${suffix}`;
 
-  await supabase
-    .from("accounts")
+  await (supabase.from("accounts") as any)
     .update({ referral_code: code })
     .eq("id", accountId);
 
@@ -465,7 +467,7 @@ async function applyStripeCredit(
       details: { stripeCustomerId, amountDollars },
     });
   } catch (err) {
-    console.error("[ViralLoop] Stripe credit failed:", err);
+    viralLog.error({ event: "stripe_credit_failed", err: String(err) }, "Stripe credit failed");
   }
 }
 
@@ -477,16 +479,20 @@ async function sendViralSMS(
 ): Promise<void> {
   if (!phone) return;
 
+  // Kill switch: block all outbound SMS
+  if (guardKillSwitch("KILL_OUTBOUND_SMS", { accountId, event: "viral_sms", eventType })) {
+    return;
+  }
+
   // TCPA check — verify not on suppression list + quiet hours
   const supabase = createServiceClient();
-  const { data: suppressed } = await supabase
-    .from("sms_suppression_list")
+  const { data: suppressed } = await (supabase.from("sms_suppression_list") as any)
     .select("phone")
     .eq("phone", phone)
     .single();
 
   if (suppressed) {
-    console.log(`[ViralLoop] Phone ${phone} on suppression list, skipping`);
+    viralLog.info({ event: "sms_suppressed", accountId }, `Phone ${phone.slice(-4)} on suppression list, skipping`);
     return;
   }
 
@@ -502,6 +508,8 @@ async function sendViralSMS(
       to: phone,
     });
 
+    viralLog.info({ event: "viral_sms_sent", accountId, eventType: eventType }, "Viral SMS sent");
+
     await auditLog({
       accountId,
       agentName: "ViralLoopAgent",
@@ -509,7 +517,7 @@ async function sendViralSMS(
       details: { eventType, messageLength: message.length },
     });
   } catch (err) {
-    console.error("[ViralLoop] SMS send failed:", err);
+    viralLog.error({ event: "sms_send_failed", accountId }, "Viral SMS send failed", err);
   }
 }
 
@@ -520,7 +528,7 @@ async function sendReferralEmail(
   data: Record<string, unknown>
 ): Promise<void> {
   // SendGrid API call — full email with referral card design
-  if (!process.env.SENDGRID_API_KEY || !account.owner_email) return;
+  if (!process.env.SENDGRID_API_KEY || !account.email) return;
 
   const emailTemplates: Record<string, string> = {
     first_job: "d-titancrew-first-job-referral",
@@ -538,7 +546,7 @@ async function sendReferralEmail(
         from: { email: "celebrate@titancrew.ai", name: "TitanCrew" },
         personalizations: [
           {
-            to: [{ email: account.owner_email, name: account.owner_name }],
+            to: [{ email: account.email, name: account.owner_name }],
             dynamic_template_data: {
               ownerName: account.owner_name,
               businessName: account.business_name,
@@ -553,7 +561,7 @@ async function sendReferralEmail(
       }),
     });
   } catch (err) {
-    console.error("[ViralLoop] Email send failed:", err);
+    viralLog.error({ event: "email_send_failed", err: String(err) }, "Email send failed");
   }
 }
 
@@ -588,18 +596,16 @@ export async function scanForViralEvents(): Promise<void> {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
   // Scan all active accounts
-  const { data: accounts } = await supabase
-    .from("accounts")
-    .select("id, business_name, owner_name, owner_phone, owner_email, plan, stripe_customer_id, referral_code, created_at")
-    .in("plan", ["basic", "pro"])
-    .eq("status", "active");
+  const { data: accounts } = await (supabase.from("accounts") as any)
+    .select("id, business_name, owner_name, phone, email, plan, stripe_customer_id, referral_code, created_at")
+    .in("plan", ["lite", "growth", "scale"])
+    .eq("subscription_status", "active");
 
   if (!accounts || accounts.length === 0) return;
 
   for (const account of accounts) {
     // Check monthly revenue milestones
-    const { data: revenueData } = await supabase
-      .from("invoices")
+    const { data: revenueData } = await (supabase.from("invoices") as any)
       .select("amount")
       .eq("account_id", account.id)
       .eq("status", "paid")
@@ -610,8 +616,7 @@ export async function scanForViralEvents(): Promise<void> {
     for (const milestone of REVENUE_MILESTONES) {
       if (monthlyRevenue >= milestone.threshold) {
         // Check if already triggered this month
-        const { data: existing } = await supabase
-          .from("viral_events_log")
+        const { data: existing } = await (supabase.from("viral_events_log") as any)
           .select("id")
           .eq("account_id", account.id)
           .eq("event_type", "monthly_revenue_milestone")
@@ -638,16 +643,14 @@ export async function scanForViralEvents(): Promise<void> {
     }
 
     // Check job count milestones
-    const { count: totalJobs } = await supabase
-      .from("jobs")
+    const { count: totalJobs } = await (supabase.from("jobs") as any)
       .select("id", { count: "exact", head: true })
       .eq("account_id", account.id)
       .eq("status", "completed");
 
     for (const milestone of JOBS_MILESTONES) {
       if ((totalJobs ?? 0) >= milestone.threshold) {
-        const { data: existingJobMilestone } = await supabase
-          .from("viral_events_log")
+        const { data: existingJobMilestone } = await (supabase.from("viral_events_log") as any)
           .select("id")
           .eq("account_id", account.id)
           .eq("event_type", "jobs_milestone")
@@ -678,8 +681,7 @@ export async function scanForViralEvents(): Promise<void> {
 
     if (yearsOnPlatform >= 1) {
       const thisYear = now.getFullYear().toString();
-      const { data: existingAnniversary } = await supabase
-        .from("viral_events_log")
+      const { data: existingAnniversary } = await (supabase.from("viral_events_log") as any)
         .select("id")
         .eq("account_id", account.id)
         .eq("event_type", "anniversary")
@@ -705,7 +707,7 @@ export async function scanForViralEvents(): Promise<void> {
     await new Promise((r) => setTimeout(r, 200));
   }
 
-  console.log(`[ViralLoop] Scan complete — checked ${accounts.length} accounts`);
+  viralLog.info({ event: "scan_complete", accountsChecked: accounts.length }, "Viral scan complete");
 }
 
 // ─── Type helper ──────────────────────────────────────────────
@@ -714,8 +716,8 @@ interface Account {
   id: string;
   business_name: string;
   owner_name: string;
-  owner_phone: string;
-  owner_email: string;
+  phone: string;
+  email: string;
   plan: string;
   stripe_customer_id: string;
   referral_code?: string;

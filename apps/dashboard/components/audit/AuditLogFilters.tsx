@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · AuditLogFilters
  * Filter bar for the audit log page.
@@ -7,7 +6,7 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
-import { Search, Filter, X } from "lucide-react";
+import { Filter, X } from "lucide-react";
 
 interface AuditLogFiltersProps {
   currentFilters: {

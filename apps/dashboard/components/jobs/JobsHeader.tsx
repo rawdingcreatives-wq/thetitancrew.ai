@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · JobsHeader
  * Sticky header for jobs page: title, total counts, + new job button.
@@ -53,8 +52,8 @@ export function JobsHeader({ accountId, technicians }: JobsHeaderProps) {
       setForm({ title: "", job_type: "service", priority: "2", estimate_amount: "", technician_id: "", address: "", customer_name: "", customer_phone: "" });
       showToast("Job created successfully!", true);
       router.refresh();
-    } catch (err: any) {
-      showToast(err.message ?? "Could not create job. Please try again.", false);
+    } catch (err: unknown) {
+      showToast((err instanceof Error ? err.message : String(err)) ?? "Could not create job. Please try again.", false);
     } finally {
       setSaving(false);
     }

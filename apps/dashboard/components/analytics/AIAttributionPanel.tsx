@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · AIAttributionPanel
  * Hero analytics block showing the core value proof:
@@ -19,7 +18,7 @@ interface AIAttributionPanelProps {
 export function AIAttributionPanel({
   revenueAI30d, jobsAI30d, jobsTotal30d, plan
 }: AIAttributionPanelProps) {
-  const planCost = plan === "pro" ? 799 : 399;
+  const planCost = plan === "growth" ? 799 : plan === "scale" ? 1299 : 399;
   const roi = planCost > 0 ? (revenueAI30d / planCost) : 0;
   const aiPct = jobsTotal30d > 0 ? (jobsAI30d / jobsTotal30d) * 100 : 0;
 

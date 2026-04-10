@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Email Send API Route
  *
@@ -12,12 +11,37 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createLogger } from "@/lib/logger";
 import {
   sendWelcomeEmail,
   sendAgentAlertEmail,
   sendInvoiceEmail,
   sendEmail,
 } from "@/lib/email/sendgrid";
+
+const log = createLogger("email-send");
+
+// ─── Types for email data ────────────────────────────────────
+
+interface WelcomeEmailData {
+  firstName: string;
+  companyName: string;
+  loginUrl: string;
+}
+
+interface AgentAlertEmailData {
+  agentName: string;
+  actionSummary: string;
+  approvalUrl: string;
+}
+
+interface InvoiceEmailData {
+  customerName: string;
+  invoiceNumber: string;
+  amount: string;
+  dueDate: string;
+  payUrl: string;
+}
 
 export async function POST(req: NextRequest) {
   // Auth: either user session or agent API secret
@@ -48,15 +72,15 @@ export async function POST(req: NextRequest) {
 
     switch (body.template) {
       case "welcome":
-        result = await sendWelcomeEmail(body.to, body.data as any);
+        result = await sendWelcomeEmail(body.to, body.data as unknown as WelcomeEmailData);
         break;
 
       case "agent_alert":
-        result = await sendAgentAlertEmail(body.to, body.data as any);
+        result = await sendAgentAlertEmail(body.to, body.data as unknown as AgentAlertEmailData);
         break;
 
       case "invoice":
-        result = await sendInvoiceEmail(body.to, body.data as any);
+        result = await sendInvoiceEmail(body.to, body.data as unknown as InvoiceEmailData);
         break;
 
       default:
@@ -72,7 +96,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: result.success, messageId: result.messageId });
   } catch (err) {
-    console.error("[Email Send] Error:", err);
+    log.error({ event: "email_send_error", err: String(err) }, "Email send error");
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

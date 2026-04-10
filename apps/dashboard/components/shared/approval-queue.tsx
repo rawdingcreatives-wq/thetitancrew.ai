@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 /**
@@ -15,6 +14,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   CheckCircle2, XCircle, Clock, AlertTriangle, Bot,
   ChevronDown, ChevronUp, Loader2, DollarSign, ShieldAlert,
@@ -41,7 +41,7 @@ interface ApprovalItem {
 
 interface ApprovalQueueProps {
   accountId: string;
-  supabase: any;
+  supabase: SupabaseClient;
   limit?: number;
   compact?: boolean;
 }

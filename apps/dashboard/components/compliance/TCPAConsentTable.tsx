@@ -1,7 +1,6 @@
-// @ts-nocheck
-import { CheckCircle2, Clock, Phone } from "lucide-react";
+import { Clock, Phone } from "lucide-react";
 
-export function TCPAConsentTable({ accountId }: { accountId: string }) {
+export function TCPAConsentTable({ _accountId }: { _accountId: string }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
       <h3 className="font-semibold text-[#1A2744] mb-1 flex items-center gap-2">

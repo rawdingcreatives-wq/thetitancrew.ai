@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Analytics Page
  * AI attribution, revenue trends, job metrics, agent performance.
@@ -10,39 +9,70 @@ import { RevenueChart } from "@/components/analytics/RevenueChart";
 import { AIAttributionPanel } from "@/components/analytics/AIAttributionPanel";
 import { AgentPerformanceTable } from "@/components/analytics/AgentPerformanceTable";
 
+interface Account {
+  id: string;
+  business_name: string;
+  jobs_booked_30d: number;
+  jobs_ai_booked_30d: number;
+  revenue_ai_30d: number;
+  plan: string;
+}
+
+interface Job {
+  id: string;
+  actual_end: string | null;
+  invoice_amount: number | null;
+  booked_by_ai: boolean;
+  status: string;
+  job_type: string;
+}
+
+interface AgentInstanceRow {
+  id: string;
+  agent_type: string;
+  actions_24h: number;
+  errors_24h: number;
+  token_cost_30d: number;
+  last_run_at: string | null;
+}
+
+interface AgentRun {
+  agent_id: string;
+  status: string;
+  cost_usd: number;
+  duration_ms: number;
+  created_at: string;
+}
+
 export default async function AnalyticsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await supabase.from("accounts")
     .select("id, business_name, jobs_booked_30d, jobs_ai_booked_30d, revenue_ai_30d, plan")
     .eq("owner_user_id", user.id)
-    .single();
+    .single() as { data: Account | null };
   if (!account) redirect("/login");
 
   // Last 90 days of completed jobs for charting
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: jobs } = await supabase
-    .from("jobs")
+  const { data: jobs } = await supabase.from("jobs")
     .select("id, actual_end, invoice_amount, booked_by_ai, status, job_type")
     .eq("account_id", account.id)
     .gte("actual_end", ninetyDaysAgo)
     .in("status", ["completed", "invoiced", "paid"])
-    .order("actual_end", { ascending: true });
+    .order("actual_end", { ascending: true }) as { data: Job[] | null };
 
   // Agent performance data
-  const { data: agents } = await supabase
-    .from("agent_instances")
+  const { data: agents } = await supabase.from("agent_instances")
     .select("id, agent_type, actions_24h, errors_24h, token_cost_30d, last_run_at")
-    .eq("account_id", account.id);
+    .eq("account_id", account.id) as unknown as { data: AgentInstanceRow[] | null };
 
-  const { data: agentRunStats } = await supabase
-    .from("agent_runs")
+  const { data: agentRunStats } = await supabase.from("agent_runs")
     .select("agent_id, status, cost_usd, duration_ms, created_at")
     .eq("account_id", account.id)
-    .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+    .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) as { data: AgentRun[] | null };
 
   // Build weekly revenue data for chart
   const weeklyData = buildWeeklyData(jobs ?? []);
@@ -72,7 +102,7 @@ export default async function AnalyticsPage() {
       <div className="bg-white rounded-2xl border border-slate-100 agent-card p-5">
         <h3 className="text-base font-bold text-[#1A2744] mb-4">Agent Performance (30 days)</h3>
         <AgentPerformanceTable
-          agents={agents ?? []}
+          agents={(agents ?? []) as unknown as Parameters<typeof AgentPerformanceTable>[0]["agents"]}
           runs={agentRunStats ?? []}
         />
       </div>
@@ -82,7 +112,7 @@ export default async function AnalyticsPage() {
 
 // ─── Helper: build weekly revenue series ─────────────────
 
-function buildWeeklyData(jobs: Array<{ actual_end: string | null; invoice_amount: number | null; booked_by_ai: boolean }>) {
+function buildWeeklyData(jobs: Job[]) {
   const weeks: Record<string, { week: string; total: number; ai: number }> = {};
 
   for (const job of jobs) {

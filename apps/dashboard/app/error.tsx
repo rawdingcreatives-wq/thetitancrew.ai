@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Global Error Boundary
  *

@@ -87,8 +87,7 @@ QUICKBOOKS SYNC:
           Date.now() - ((input.hours_since_completion as number) ?? 24) * 60 * 60 * 1000
         ).toISOString();
 
-        const { data } = await this.supabase
-          .from("jobs")
+        const { data } = await (this.supabase.from("jobs") as any)
           .select(`
             id, title, actual_end, estimate_amount, invoice_amount, parts_needed, job_type, notes,
             trade_customers!inner(id, name, email, phone),
@@ -163,8 +162,7 @@ QUICKBOOKS SYNC:
         }
 
         // Update job record
-        await this.supabase
-          .from("jobs")
+        await (this.supabase.from("jobs") as any)
           .update({
             status: "invoiced",
             invoice_id: invoiceResult.invoiceId,
@@ -251,8 +249,7 @@ QUICKBOOKS SYNC:
         // Enrich with customer contact info from TradeBrain DB
         const enriched = await Promise.all(
           overdueInvoices.map(async (inv) => {
-            const { data: job } = await this.supabase
-              .from("jobs")
+            const { data: job } = await (this.supabase.from("jobs") as any)
               .select(`
                 id, title,
                 trade_customers!inner(id, name, phone, email)
@@ -308,18 +305,17 @@ QUICKBOOKS SYNC:
             toDate = new Date(input.date_to as string);
         }
 
-        const { data: jobs } = await this.supabase
-          .from("jobs")
+        const { data: jobs } = await (this.supabase.from("jobs") as any)
           .select("id, invoice_amount, paid_amount, booked_by_ai, status")
           .eq("account_id", this.config.accountId)
           .in("status", ["invoiced", "paid", "completed"])
           .gte("actual_end", fromDate.toISOString())
           .lte("actual_end", toDate.toISOString());
 
-        const total = (jobs ?? []).reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
-        const paid = (jobs ?? []).reduce((s, j) => s + (j.paid_amount ?? 0), 0);
-        const aiBooked = (jobs ?? []).filter((j) => j.booked_by_ai);
-        const aiRevenue = aiBooked.reduce((s, j) => s + (j.invoice_amount ?? 0), 0);
+        const total = (jobs ?? []).reduce((s: any, j: any) => s + (j.invoice_amount ?? 0), 0);
+        const paid = (jobs ?? []).reduce((s: any, j: any) => s + (j.paid_amount ?? 0), 0);
+        const aiBooked = (jobs ?? []).filter((j: any) => j.booked_by_ai);
+        const aiRevenue = aiBooked.reduce((s: any, j: any) => s + (j.invoice_amount ?? 0), 0);
 
         return {
           period: input.period,
@@ -346,8 +342,7 @@ QUICKBOOKS SYNC:
       },
       riskLevel: "low",
       handler: async (input, ctx) => {
-        const { data: account } = await this.supabase
-          .from("accounts")
+        const { data: account } = await (this.supabase.from("accounts") as any)
           .select("phone, notification_prefs")
           .eq("id", this.config.accountId)
           .single();

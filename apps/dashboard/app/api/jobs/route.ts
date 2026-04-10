@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · POST /api/jobs
  * Create a new job lead. Optionally creates a trade_customer record.
@@ -6,6 +5,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("jobs");
 
 export async function POST(req: NextRequest) {
   try {
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
     // Upsert customer if name/phone provided
     let customerId: string | null = null;
     if (body.customer_name || body.customer_phone) {
-      const { data: customer, error: custErr } = await service
+      const { data: customer, error: custErr } = await (service as any)
         .from("trade_customers")
         .upsert(
           {
@@ -64,11 +66,14 @@ export async function POST(req: NextRequest) {
         .select("id")
         .single();
 
-      if (!custErr && customer) customerId = customer.id;
+      if (!custErr && customer) {
+        const customerTyped = customer as any;
+        customerId = customerTyped.id;
+      }
     }
 
     // Create the job
-    const { data: job, error: jobErr } = await service
+    const { data: job, error: jobErr } = await (service as any)
       .from("jobs")
       .insert({
         account_id: body.accountId,
@@ -87,13 +92,13 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (jobErr) {
-      console.error("[Jobs API] Insert error:", jobErr);
+      log.error({ event: "insert_error", err: String(jobErr) }, "Insert error");
       return NextResponse.json({ error: jobErr.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, job });
   } catch (err) {
-    console.error("[Jobs API] Unhandled:", err);
+    log.error({ event: "unhandled_error", err: String(err) }, "Unhandled error");
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

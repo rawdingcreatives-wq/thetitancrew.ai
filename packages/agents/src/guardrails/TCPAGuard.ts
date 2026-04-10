@@ -91,7 +91,7 @@ export class TCPAGuard {
    */
   async processStop(phone: string): Promise<void> {
     // Update any customer records with this phone
-    await this.supabase
+    await (this.supabase as any)
       .from("trade_customers")
       .update({ comms_opt_out: true })
       .eq("account_id", this.accountId)
@@ -107,14 +107,14 @@ export class TCPAGuard {
       body: "STOP",
       status: "received",
       ai_generated: false,
-    });
+    } as any);
   }
 
   /**
    * Process an inbound START/UNSTOP — re-enable contact.
    */
   async processStart(phone: string): Promise<void> {
-    await this.supabase
+    await (this.supabase as any)
       .from("trade_customers")
       .update({ comms_opt_out: false })
       .eq("account_id", this.accountId)
@@ -123,7 +123,7 @@ export class TCPAGuard {
 
   private async isOptedOut(phone: string, customerId: string | null): Promise<boolean> {
     if (customerId) {
-      const { data } = await this.supabase
+      const { data } = await (this.supabase as any)
         .from("trade_customers")
         .select("comms_opt_out")
         .eq("id", customerId)
@@ -132,7 +132,7 @@ export class TCPAGuard {
     }
 
     // Also check by phone number directly
-    const { data } = await this.supabase
+    const { data } = await (this.supabase as any)
       .from("trade_customers")
       .select("comms_opt_out")
       .eq("account_id", this.accountId)
@@ -145,7 +145,7 @@ export class TCPAGuard {
 
   private async checkQuietHours(recipientPhone: string): Promise<TCPACheckResult> {
     // Determine timezone from account's state
-    const { data: account } = await this.supabase
+    const { data: account } = await (this.supabase as any)
       .from("accounts")
       .select("state, timezone")
       .eq("id", this.accountId)
@@ -182,7 +182,7 @@ export class TCPAGuard {
     if (!customerId) return false;
 
     // Check consent in customer metadata
-    const { data } = await this.supabase
+    const { data } = await (this.supabase as any)
       .from("trade_customers")
       .select("comms_opt_out, tags")
       .eq("id", customerId)

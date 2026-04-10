@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · LiveJobFeed
  * Real-time job pipeline with status indicators.
@@ -8,7 +7,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, Clock, MapPin, DollarSign, User, Circle, ChevronRight } from "lucide-react";
+import { Bot, Clock, DollarSign, User, ChevronRight } from "lucide-react";
 import type { JobStatus } from "@/lib/supabase/types";
 
 interface Job {

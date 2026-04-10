@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Public Landing Page
  *
@@ -8,9 +7,9 @@
 
 import Link from "next/link";
 import {
-  Bot, Calendar, DollarSign, Wrench, Shield, Zap,
-  ArrowRight, CheckCircle2, Star, Phone, Clock,
-  TrendingUp, Users, MessageSquare, Package,
+  Bot, Calendar, DollarSign, Shield, Zap,
+  ArrowRight, CheckCircle2, Star,
+  TrendingUp, MessageSquare, Package,
 } from "lucide-react";
 
 const TRADES = [

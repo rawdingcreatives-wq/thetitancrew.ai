@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Admin Financials Dashboard
  *
@@ -11,7 +10,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   DollarSign, TrendingUp, TrendingDown, Users,
-  CreditCard, AlertTriangle, ArrowUpRight, PieChart,
+  CreditCard, PieChart,
 } from "lucide-react";
 
 interface PlanBreakdown {
@@ -28,16 +27,10 @@ interface BillingEvent {
   account_id: string;
 }
 
-const PLAN_PRICES: Record<string, number> = {
-  basic: 399,
-  pro: 799,
-  enterprise: 1299,
-};
-
 const PLAN_COLORS: Record<string, string> = {
-  basic: "bg-slate-500",
-  pro: "bg-blue-500",
-  enterprise: "bg-[#FF6B00]",
+  lite: "bg-slate-500",
+  growth: "bg-blue-500",
+  scale: "bg-[#FF6B00]",
 };
 
 export default function AdminFinancialsPage() {
@@ -70,7 +63,7 @@ export default function AdminFinancialsPage() {
       const planMap: Record<string, { count: number; mrr: number }> = {};
       let mrr = 0;
       for (const a of accts) {
-        const p = a.plan ?? "basic";
+        const p = a.plan ?? "lite";
         if (!planMap[p]) planMap[p] = { count: 0, mrr: 0 };
         planMap[p].count++;
         const accountMrr = parseFloat(a.mrr) || 0;
@@ -205,7 +198,7 @@ export default function AdminFinancialsPage() {
   );
 }
 
-function FinKPI({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
+function FinKPI({ icon: Icon, label, value, color }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; color: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur p-4">
       <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center mb-2`}>

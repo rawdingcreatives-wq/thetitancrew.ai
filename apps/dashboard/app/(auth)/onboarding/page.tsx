@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Onboarding Wizard v2
  *
@@ -75,6 +74,7 @@ function OnboardingContent() {
   const [navigating, setNavigating] = useState(false); // debounce nav buttons
   const [deploying,  setDeploying]  = useState(false);
   const [deployDone, setDeployDone] = useState(false);
+  const [deployError, setDeployError] = useState<string | null>(null);
   const [accountId,  setAccountId]  = useState<string | null>(null);
 
   const [calConn,  setCalConn]  = useState(false);
@@ -140,10 +140,16 @@ function OnboardingContent() {
       if (acc.qbo_access_token)      setQboConn(true);
       if (acc.meta_access_token)     setMetaConn(true);
 
+      // If crew was already deployed, go straight to the dashboard.
+      if (acc.crew_deployed_at) {
+        router.replace("/");
+        return;
+      }
+
       const saved = acc.onboard_step ?? 1;
       if (saved > 1 && saved < TOTAL) setStep(saved);
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params, router, supabase]);
 
   const canProceed = (): boolean => {
     if (step === 1) return !!(form.business_name && form.owner_name && form.phone);
@@ -200,10 +206,14 @@ function OnboardingContent() {
 
   const handleDeploy = async () => {
     setDeploying(true);
+    setDeployError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setDeploying(false); return; }
 
+      // ── Step 1: Save profile + notification prefs (NOT deployment state). ──
+      // crew_deployed_at and onboard_step stay at their current values.
+      // This ensures a failed trigger does not leave the account marked as deployed.
       const { data: acc } = await (supabase.from("accounts") as any)
         .upsert(
           {
@@ -222,8 +232,6 @@ function OnboardingContent() {
             roi_avg_job_value: form.roi_avg_job_value,
             roi_admin_hours:   form.roi_admin_hours,
             twilio_phone_number: form.twilio_phone || null,
-            onboard_step:      TOTAL,
-            crew_deployed_at:  new Date().toISOString(),
             notification_prefs: {
               sms:           form.sms_alerts,
               email:         form.email_digest,
@@ -235,27 +243,92 @@ function OnboardingContent() {
         .select("id")
         .single();
 
-      if (!acc) { setDeploying(false); return; }
+      if (!acc) {
+        setDeployError("Could not save your account. Please try again.");
+        setDeploying(false);
+        return;
+      }
 
-      fetch("/api/agents/trigger", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId: acc.id,
-          event:     "onboard_new_customer",
-          payload: {
-            business_name:  form.business_name,
-            trade_type:     form.trade_type,
-            tech_count:     form.tech_count,
-            meta_connected: metaConn,
-          },
-        }),
-      }).catch((err) => console.error("[Onboarding] Agent trigger failed:", err));
+      // ── Step 2: Fire the agent trigger. ──────────────────────────
+      // Event MUST be "onboard_deploy" — that's the contract MetaSwarmOrchestrator recognizes.
+      // Payload must include all fields OnboarderAgent needs for the full 12-step activation.
+      let triggerOk = false;
+      try {
+        const triggerRes = await fetch("/api/agents/trigger", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountId: acc.id,
+            event:     "onboard_deploy",
+            payload: {
+              accountId:                acc.id,
+              ownerEmail:               user.email ?? "",
+              ownerName:                form.owner_name,
+              businessName:             form.business_name,
+              tradeType:                form.trade_type,
+              teamSize:                 String(form.tech_count),
+              phone:                    form.phone || undefined,
+              timezone:                 Intl.DateTimeFormat().resolvedOptions().timeZone,
+              googleCalendarConnected:  calConn,
+              quickbooksConnected:      qboConn,
+              smsOptIn:                 form.sms_alerts,
+              city:                     form.city || undefined,
+              state:                    form.state || undefined,
+            },
+          }),
+        });
 
-      setDeployDone(true);
-      setTimeout(() => router.replace("/"), 2500);
+        if (triggerRes.ok) {
+          triggerOk = true;
+        } else {
+          const errBody = await triggerRes.json().catch(() => ({}));
+          console.error("[Onboarding] Agent trigger error:", triggerRes.status, errBody);
+          const hint = (errBody as Record<string, string>)?.hint ?? "";
+          setDeployError(
+            hint.includes("AGENT_API_URL")
+              ? "Agent service is not configured yet. Your account is saved — contact support to activate your crew."
+              : "Your crew couldn't be activated right now. Your account is saved — please try again in a moment."
+          );
+        }
+      } catch (err) {
+        console.error("[Onboarding] Agent trigger network error:", err);
+        setDeployError("Network error reaching the agent service. Your account is saved — please try again.");
+      }
+
+      // ── Step 3: Persist deployment state — must succeed before showing success. ──
+      // /api/account/complete-onboarding is the single canonical writer of
+      // crew_deployed_at and onboard_step=9. Both the UI gate (home/page.tsx)
+      // and the checklist read crew_deployed_at as the source of truth.
+      // If this call fails, we do NOT show success — the user stays on step 9
+      // and can retry. The agent trigger already fired and the crew is activating,
+      // but the user will enter the dashboard only once the DB record is clean.
+      if (triggerOk) {
+        let completeOk = false;
+        try {
+          const completeRes = await fetch("/api/account/complete-onboarding", { method: "POST" });
+          completeOk = completeRes.ok;
+          if (!completeOk) {
+            const errBody = await completeRes.json().catch(() => ({}));
+            console.error("[Onboarding] complete-onboarding failed:", completeRes.status, errBody);
+            setDeployError("Your crew is activating but we couldn't finalize your account. Please try again — it's safe to retry.");
+          }
+        } catch (err) {
+          console.error("[Onboarding] complete-onboarding network error:", err);
+          setDeployError("Network error finalizing your account. Your crew is activating — please retry to unlock the dashboard.");
+        }
+
+        if (completeOk) {
+          setDeployDone(true);
+          setTimeout(() => router.replace("/"), 2500);
+        } else {
+          setDeploying(false);
+        }
+      } else {
+        setDeploying(false);
+      }
     } catch (err) {
       console.error("Deploy error:", err);
+      setDeployError("Something went wrong. Please try again.");
       setDeploying(false);
     }
   };
@@ -270,7 +343,7 @@ function OnboardingContent() {
     window.location.href = `/api/integrations/quickbooks?action=start&returnTo=/onboarding`;
   };
   // Meta / Facebook intentionally disabled — placeholder kept for future feature
-  const startMeta = () => {
+  const _startMeta = () => {
     alert("Social media integrations are coming soon. Skip this step for now.");
   };
 
@@ -418,12 +491,12 @@ function OnboardingContent() {
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">$</span>
                   <input type="number" className={INPUT + " pl-7"} value={form.avg_job_value}
                     onChange={(e) => { const v = parseInt(e.target.value) || 0; upd("avg_job_value", v); upd("roi_avg_job_value", v); }} />
-                  </div>
+                </div>
               </Field>
             </Card>
           )}
 
-          {/* ═══ STEP 4 — ROI Calculator ═════════════════════ */}
+          {/* ═══ STEP 4 — ROI Calculator ══════════════════════ */}
           {step === 4 && (
             <ROICalculator
               initialData={{
@@ -461,7 +534,7 @@ function OnboardingContent() {
             </Card>
           )}
 
-          {/* ═══ STEP 2 — QuickBooks ══════════════════════════ */}
+          {/* ═══ STEP 6 — QuickBooks ══════════════════════════ */}
           {step === 6 && (
             <Card title="Connect QuickBooks Online" sub="Finance AI auto-creates invoices, syncs payments, and chases late accounts.">
               {qboConn ? (
@@ -479,7 +552,7 @@ function OnboardingContent() {
             </Card>
           )}
 
-          {/* ═══ STEP 2 — Social Media (Coming Soon) ════════ */}
+          {/* ═══ STEP 7 — Social Media (Coming Soon) ════════ */}
           {step === 7 && (
             <Card title="Social Media Automation" sub="Growth AI will post deals, respond to leads, and share 5-star reviews automatically.">
               <div className="space-y-4">
@@ -488,7 +561,7 @@ function OnboardingContent() {
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
                       style={{ background: "rgba(255,107,0,0.12)", border: "1px solid rgba(255,107,0,0.25)" }}>
-                       📣
+                      📣
                     </div>
                     <div>
                       <p className="text-sm font-bold text-white">Growth AI handles your social presence</p>
@@ -546,14 +619,14 @@ function OnboardingContent() {
                       <p className="text-xs text-slate-500">{item.sub}</p>
                     </div>
                     <button
-                      onClick={() => upd(item.key, !(form as any)[item.key])}
+                      onClick={() => { const k = item.key as keyof typeof form; upd(k, !form[k]); }}
                       role="switch"
-                      aria-checked={(form as any)[item.key]}
+                      aria-checked={Boolean(form[item.key as keyof typeof form])}
                       className="relative flex-shrink-0 rounded-full transition-colors"
-                      style={{ width: 40, height: 22, background: (form as any)[item.key] ? "#FF6B00" : "rgba(255,255,255,0.15)" }}
+                      style={{ width: 40, height: 22, background: form[item.key as keyof typeof form] ? "#FF6B00" : "rgba(255,255,255,0.15)" }}
                     >
                       <span className="absolute top-0.5 w-[18px] h-[18px] bg-white rounded-full shadow transition-transform duration-200"
-                        style={{ transform: (form as any)[item.key] ? "translateX(20px)" : "translateX(2px)" }} />
+                        style={{ transform: form[item.key as keyof typeof form] ? "translateX(20px)" : "translateX(2px)" }} />
                     </button>
                   </div>
                 ))}
@@ -608,9 +681,16 @@ function OnboardingContent() {
                     {deploying ? (
                       <><span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Deploying your crew…</>
                     ) : (
-                      <><Rocket className="w-5 h-5" />Launch TitanCrew</>
+                      <><Rocket className="w-5 h-5" />{deployError ? "Retry Launch" : "Launch TitanCrew"}</>
                     )}
                   </button>
+
+                  {deployError && (
+                    <div className="rounded-xl px-4 py-3 text-sm"
+                      style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)" }}>
+                      <p className="text-red-400 font-medium">{deployError}</p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-8 space-y-4">
@@ -718,14 +798,6 @@ function Benefits({ items }: { items: string[] }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-function FbIcon() {
-  return (
-    <svg className="w-5 h-5" fill="white" viewBox="0 0 24 24">
-      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-    </svg>
   );
 }
 

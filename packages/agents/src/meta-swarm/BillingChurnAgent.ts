@@ -33,10 +33,9 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "../../apps/dashboard/lib/supabase/types";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-const supabase = createClient<Database>(
+const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
@@ -317,8 +316,7 @@ async function executeTool(
       if (!account) return { found: false };
 
       // Get last agent run
-      const { data: lastRun } = await supabase
-        .from("agent_runs")
+      const { data: lastRun } = await (supabase.from("agent_runs") as any)
         .select("created_at")
         .eq("account_id", account.id)
         .order("created_at", { ascending: false })
@@ -330,8 +328,7 @@ async function executeTool(
         : 999;
 
       // Get payment failure count
-      const { data: paymentFailures } = await supabase
-        .from("billing_events")
+      const { data: paymentFailures } = await (supabase.from("billing_events") as any)
         .select("id")
         .eq("account_id", account.id)
         .eq("event_type", "invoice.payment_failed")
@@ -383,8 +380,7 @@ async function executeTool(
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const trialEndingSoon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
-      const { data: accounts } = await supabase
-        .from("accounts")
+      const { data: accounts } = await (supabase.from("accounts") as any)
         .select("id, business_name, phone, email, plan, health_score, mrr, subscription_status")
         .in("subscription_status", ["active", "trialing", "past_due"])
         .or(`health_score.lt.50,subscription_status.eq.past_due`)
@@ -402,18 +398,15 @@ async function executeTool(
       const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
 
       const [jobsResult, runsResult, commsResult] = await Promise.all([
-        supabase
-          .from("jobs")
+        (supabase.from("jobs") as any)
           .select("id, amount, status, ai_booked")
           .eq("account_id", accountId)
           .gte("created_at", since),
-        supabase
-          .from("agent_runs")
+        (supabase.from("agent_runs") as any)
           .select("id, agent_type, status")
           .eq("account_id", accountId)
           .gte("created_at", since),
-        supabase
-          .from("comms_log")
+        (supabase.from("comms_log") as any)
           .select("id, direction")
           .eq("account_id", accountId)
           .eq("direction", "outbound")
@@ -424,11 +417,11 @@ async function executeTool(
       const runs = runsResult.data ?? [];
       const comms = commsResult.data ?? [];
 
-      const aiBookedJobs = jobs.filter((j) => j.ai_booked);
-      const completedJobs = jobs.filter((j) => j.status === "completed" || j.status === "paid");
-      const totalRevenue = completedJobs.reduce((s, j) => s + (j.amount ?? 0), 0);
-      const aiRevenue = aiBookedJobs.filter((j) => j.status === "completed" || j.status === "paid")
-        .reduce((s, j) => s + (j.amount ?? 0), 0);
+      const aiBookedJobs = jobs.filter((j: any) => j.ai_booked);
+      const completedJobs = jobs.filter((j: any) => j.status === "completed" || j.status === "paid");
+      const totalRevenue = completedJobs.reduce((s: number, j: any) => s + (j.amount ?? 0), 0);
+      const aiRevenue = aiBookedJobs.filter((j: any) => j.status === "completed" || j.status === "paid")
+        .reduce((s: number, j: any) => s + (j.amount ?? 0), 0);
 
       return {
         periodDays,
@@ -438,7 +431,7 @@ async function executeTool(
         totalRevenue,
         aiRevenue,
         agentRuns: runs.length,
-        successfulRuns: runs.filter((r) => r.status === "completed").length,
+        successfulRuns: runs.filter((r: any) => r.status === "completed").length,
         customerMessages: comms.length,
         estimatedTimeSaved: `~${Math.round(runs.length * 12)} minutes`,
       };
@@ -578,8 +571,8 @@ async function executeTool(
           `https://api.stripe.com/v1/invoices/${invoiceId}`,
           { headers: { Authorization: `Bearer ${stripeKey}` } }
         );
-        const invoice = await invoiceResp.json();
-        return { success: true, link: invoice.hosted_invoice_url ?? `https://app.titancrew.ai/billing` };
+        const invoice = (await invoiceResp.json()) as any;
+        return { success: true, link: (invoice as any).hosted_invoice_url ?? `https://app.titancrew.ai/billing` };
       }
 
       // Otherwise, create a customer portal session
@@ -597,8 +590,8 @@ async function executeTool(
           }).toString(),
         }
       );
-      const portal = await portalResp.json();
-      return { success: portalResp.ok, link: portal.url ?? `https://app.titancrew.ai/billing` };
+      const portal = (await portalResp.json()) as any;
+      return { success: portalResp.ok, link: (portal as any).url ?? `https://app.titancrew.ai/billing` };
     }
 
     case "apply_stripe_discount": {
@@ -626,9 +619,9 @@ async function executeTool(
           name: `TitanCrew Win-Back ${discountPercent}%`,
         }).toString(),
       });
-      const coupon = await couponResp.json();
+      const coupon = (await couponResp.json()) as any;
 
-      if (!coupon.id) return { success: false, error: coupon.error?.message };
+      if (!coupon.id) return { success: false, error: (coupon.error as any)?.message };
 
       // Apply to customer
       const custResp = await fetch(`https://api.stripe.com/v1/customers/${stripeCustomerId}`, {
@@ -637,10 +630,10 @@ async function executeTool(
           "Content-Type": "application/x-www-form-urlencoded",
           Authorization: `Bearer ${stripeKey}`,
         },
-        body: new URLSearchParams({ coupon: coupon.id }).toString(),
+        body: new URLSearchParams({ coupon: (coupon as any).id }).toString(),
       });
 
-      return { success: custResp.ok, couponId: coupon.id, discountPercent, durationMonths };
+      return { success: custResp.ok, couponId: (coupon as any).id, discountPercent, durationMonths };
     }
 
     case "pause_subscription": {
@@ -658,8 +651,8 @@ async function executeTool(
         `https://api.stripe.com/v1/subscriptions?customer=${stripeCustomerId}&status=active&limit=1`,
         { headers: { Authorization: `Bearer ${stripeKey}` } }
       );
-      const subs = await subsResp.json();
-      const subId = subs.data?.[0]?.id;
+      const subs = (await subsResp.json()) as any;
+      const subId = (subs as any).data?.[0]?.id;
 
       if (!subId) return { success: false, reason: "No active subscription found" };
 
@@ -710,8 +703,7 @@ async function executeTool(
       };
 
       const clampedScore = Math.max(0, Math.min(100, newScore));
-      const { error } = await supabase
-        .from("accounts")
+      const { error } = await (supabase.from("accounts") as any)
         .update({ health_score: clampedScore })
         .eq("id", accountId);
 
@@ -785,13 +777,13 @@ async function sendSMS(phone: string, message: string, accountId?: string): Prom
       from_address: twilioFrom,
       body: message,
       status: resp.ok ? "sent" : "failed",
-      external_id: data.sid,
+      external_id: (data as any).sid,
       ai_generated: true,
       created_at: new Date().toISOString(),
     });
   }
 
-  return { sent: resp.ok, sid: data.sid };
+  return { sent: resp.ok, sid: (data as any).sid };
 }
 
 // ─── Main Agent Loop ──────────────────────────────────────
@@ -907,8 +899,7 @@ export async function runDailyChurnScan(): Promise<{
   accountsScanned: number;
   interventionsStarted: number;
 }> {
-  const { data: atRiskAccounts } = await supabase
-    .from("accounts")
+  const { data: atRiskAccounts } = await (supabase.from("accounts") as any)
     .select("id, health_score, subscription_status, stripe_customer_id")
     .in("subscription_status", ["active", "trialing", "past_due"])
     .lt("health_score", 50)

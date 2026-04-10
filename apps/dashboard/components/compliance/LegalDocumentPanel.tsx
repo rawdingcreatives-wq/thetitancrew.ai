@@ -1,7 +1,6 @@
-// @ts-nocheck
-import { FileText, ExternalLink, Download } from "lucide-react";
+import { FileText, ExternalLink } from "lucide-react";
 
-export function LegalDocumentPanel({ accountId, accountCreatedAt, plan }: { accountId: string; accountCreatedAt: string; plan: string }) {
+export function LegalDocumentPanel({ _accountId, accountCreatedAt, plan }: { _accountId?: string; accountCreatedAt: string; plan: string }) {
   const docs = [
     { title: "Terms of Service", url: "https://titancrew.ai/legal/terms", date: "Jan 1, 2026" },
     { title: "Privacy Policy", url: "https://titancrew.ai/legal/privacy", date: "Jan 1, 2026" },

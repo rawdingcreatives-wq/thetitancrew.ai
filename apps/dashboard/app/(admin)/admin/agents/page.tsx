@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · Admin AI Agent Health Monitor
  *
@@ -10,8 +9,8 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  Bot, Activity, AlertTriangle, Clock, Zap, DollarSign,
-  RefreshCw, Power, PowerOff, CheckCircle, XCircle,
+  Bot, Activity, AlertTriangle, Clock, DollarSign,
+  RefreshCw, CheckCircle, XCircle,
   Cpu, BarChart3,
 } from "lucide-react";
 
@@ -54,29 +53,6 @@ interface AgentTypeSummary {
   totalErrors24h: number;
 }
 
-const STATUS_ICONS: Record<string, any> = {
-  idle: Clock,
-  running: Activity,
-  waiting_human: Zap,
-  error: AlertTriangle,
-  disabled: PowerOff,
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  idle: "text-slate-400",
-  running: "text-emerald-400",
-  waiting_human: "text-amber-400",
-  error: "text-red-400",
-  disabled: "text-slate-600",
-};
-
-const STATUS_BG: Record<string, string> = {
-  idle: "bg-slate-500/20",
-  running: "bg-emerald-500/20",
-  waiting_human: "bg-amber-500/20",
-  error: "bg-red-500/20",
-  disabled: "bg-slate-500/10",
-};
 
 export default function AdminAgentsPage() {
   const [agents, setAgents] = useState<AgentInstance[]>([]);
@@ -126,14 +102,6 @@ export default function AdminAgentsPage() {
   };
 
   useEffect(() => { fetchData(); }, []);
-
-  const handleToggleAgent = async (agentId: string, enable: boolean) => {
-    const supabase = createClient();
-    await (supabase.from("agent_instances") as any)
-      .update({ is_enabled: enable, status: enable ? "idle" : "disabled" })
-      .eq("id", agentId);
-    fetchData();
-  };
 
   if (loading) {
     return (
@@ -262,7 +230,7 @@ export default function AdminAgentsPage() {
   );
 }
 
-function AgentKPI({ icon: Icon, label, value, color }: { icon: any; label: string; value: string | number; color: string }) {
+function AgentKPI({ icon: Icon, label, value, color }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string | number; color: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur p-4">
       <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center mb-2`}>

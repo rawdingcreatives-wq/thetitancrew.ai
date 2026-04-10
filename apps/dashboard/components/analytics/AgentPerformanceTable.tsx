@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · AgentPerformanceTable
  * Shows per-agent stats: runs, success rate, avg latency, 30d cost.
@@ -6,7 +5,6 @@
 
 "use client";
 
-import { CheckCircle, XCircle, Clock, DollarSign } from "lucide-react";
 import type { AgentType } from "@/lib/supabase/types";
 
 const AGENT_LABELS: Partial<Record<AgentType, string>> = {

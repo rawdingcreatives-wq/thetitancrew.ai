@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · HIL Confirmation Route
  * Owner clicks approve/reject link from SMS → this updates the DB → agent unblocks.
@@ -6,6 +5,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+
+interface HILConfirmation {
+  id: string;
+  description: string;
+  action_type: string;
+}
 
 export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -16,9 +21,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing token or action" }, { status: 400 });
   }
 
-  const supabase = createServiceClient();
+  const supabase = await createServiceClient();
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("hil_confirmations")
     .update({
       status: action === "approve" ? "approved" : "rejected",
@@ -28,7 +33,7 @@ export async function POST(req: NextRequest) {
     .eq("status", "pending")
     .gt("expires_at", new Date().toISOString())
     .select("id, description, action_type")
-    .single();
+    .single() as { data: HILConfirmation | null; error?: { message: string } };
 
   if (error || !data) {
     return NextResponse.json(

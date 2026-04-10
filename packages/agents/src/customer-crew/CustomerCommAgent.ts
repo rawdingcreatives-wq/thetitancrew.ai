@@ -266,8 +266,7 @@ DO NOT:
           const tomorrowEnd = new Date(tomorrow);
           tomorrowEnd.setHours(23, 59, 59, 999);
 
-          const { data } = await this.supabase
-            .from("jobs")
+          const { data } = await (this.supabase.from("jobs") as any)
             .select(`
               id, title, scheduled_start, scheduled_end,
               trade_customers!inner(id, name, phone, comms_opt_out),
@@ -284,8 +283,7 @@ DO NOT:
           const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
           const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
 
-          const { data } = await this.supabase
-            .from("jobs")
+          const { data } = await (this.supabase.from("jobs") as any)
             .select(`
               id, title, actual_end,
               trade_customers!inner(id, name, phone, comms_opt_out)
@@ -301,8 +299,7 @@ DO NOT:
           const sixMonthsAgo = new Date();
           sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-          const { data } = await this.supabase
-            .from("trade_customers")
+          const { data } = await (this.supabase.from("trade_customers") as any)
             .select("id, name, phone, last_service_at, comms_opt_out, total_jobs")
             .eq("account_id", this.config.accountId)
             .eq("comms_opt_out", false)
@@ -333,8 +330,7 @@ DO NOT:
       riskLevel: "low",
       handler: async (input, ctx) => {
         // Notify owner via SMS about the flagged message
-        const { data: account } = await this.supabase
-          .from("accounts")
+        const { data: account } = await (this.supabase.from("accounts") as any)
           .select("phone")
           .eq("id", this.config.accountId)
           .single();
@@ -383,8 +379,7 @@ Execute the appropriate communications and report what was sent.`,
   }
 
   private async getGoogleReviewUrl(): Promise<string> {
-    const { data } = await this.supabase
-      .from("accounts")
+    const { data } = await (this.supabase.from("accounts") as any)
       .select("integrations")
       .eq("id", this.config.accountId)
       .single();

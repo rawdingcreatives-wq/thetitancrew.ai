@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew — SocialActivityChart
  * Pie/donut chart showing social posts by platform using Recharts.
@@ -6,7 +5,7 @@
 
 "use client";
 
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 interface Props {
   platformCounts: Record<string, number>;

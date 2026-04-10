@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * TitanCrew · SendGrid Email Service
  *
@@ -13,6 +12,11 @@
  *   review_request   — post-job review solicitation
  *   agent_alert      — agent needs approval / error notification
  */
+
+import { createLogger } from "@/lib/logger";
+import { guardKillSwitch } from "@/lib/kill-switches";
+
+const log = createLogger("sendgrid");
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY ?? "";
 const SENDGRID_API_URL = "https://api.sendgrid.com/v3/mail/send";
@@ -60,12 +64,17 @@ export interface SendEmailResult {
 // ─── Send email ──────────────────────────────────────────────
 
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-  if (!SENDGRID_API_KEY) {
-    console.warn("[SendGrid] API key not configured — email skipped");
-    return { success: false, statusCode: 0, error: "SENDGRID_API_KEY not set" };
+  const recipients = Array.isArray(options.to) ? options.to : [options.to];
+
+  // Kill switch: block all outbound email during incidents
+  if (guardKillSwitch("KILL_OUTBOUND_EMAIL", { event: "email_send", to: recipients, subject: options.subject })) {
+    return { success: false, statusCode: 0, error: "Kill switch KILL_OUTBOUND_EMAIL is active" };
   }
 
-  const recipients = Array.isArray(options.to) ? options.to : [options.to];
+  if (!SENDGRID_API_KEY) {
+    log.warn({ event: "api_key_missing" }, "SendGrid API key not configured — email skipped");
+    return { success: false, statusCode: 0, error: "SENDGRID_API_KEY not set" };
+  }
 
   const personalizations = recipients.map((email) => ({
     to: [{ email }],
@@ -112,10 +121,10 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     }
 
     const errorBody = await response.text();
-    console.error(`[SendGrid] ${response.status}: ${errorBody}`);
+    log.error({ event: "send_failed", statusCode: response.status, to: recipients }, `SendGrid ${response.status}: ${errorBody}`);
     return { success: false, statusCode: response.status, error: errorBody };
   } catch (err) {
-    console.error("[SendGrid] Network error:", err);
+    log.error({ event: "network_error", to: recipients }, "SendGrid network error", err);
     return { success: false, statusCode: 0, error: String(err) };
   }
 }

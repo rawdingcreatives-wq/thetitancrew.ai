@@ -19,13 +19,20 @@
  */
 
 import express, { Request, Response } from "express";
+// @ts-ignore
 import cron from "node-cron";
+// @ts-ignore
 import { createServiceClient } from "@/lib/supabase/service";
+// @ts-ignore
 import { auditLog } from "@titancrew/agents/src/guardrails/AuditLogger";
 import { runCaseStudyGeneratorAgent, runWeeklyCaseStudyBatch } from "./CaseStudyGeneratorAgent";
 import { runTradesGroupPosterAgent } from "./TradesGroupPosterAgent";
 import { runViralLoopAgent, scanForViralEvents, ViralEvent } from "./ViralLoopAgent";
 import twilio from "twilio";
+import { guardKillSwitch } from "../guardrails/kill-switches";
+import { createLogger } from "../guardrails/logger";
+
+const growthLog = createLogger("GrowthOrchestrator");
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -69,7 +76,9 @@ export function registerGrowthRoutes(app: express.Application): void {
     }
 
     // Non-blocking — run in background
-    runCaseStudyGeneratorAgent({ accountId, jobId, forceRegenerate }).catch(console.error);
+    runCaseStudyGeneratorAgent({ accountId, jobId, forceRegenerate }).catch((err) =>
+      growthLog.error({ event: "case_study_trigger_failed", accountId, jobId, err: String(err) }, "Case study trigger failed")
+    );
 
     return res.json({ status: "queued", accountId, jobId });
   });
@@ -87,7 +96,9 @@ export function registerGrowthRoutes(app: express.Application): void {
     }
 
     // Non-blocking
-    runTradesGroupPosterAgent(ctx).catch(console.error);
+    runTradesGroupPosterAgent(ctx).catch((err) =>
+      growthLog.error({ event: "social_post_trigger_failed", accountId, err: String(err) }, "Social post trigger failed")
+    );
 
     return res.json({ status: "queued", accountId });
   });
@@ -99,7 +110,9 @@ export function registerGrowthRoutes(app: express.Application): void {
       return res.status(400).json({ error: "accountId and eventType required" });
     }
 
-    runViralLoopAgent(event).catch(console.error);
+    runViralLoopAgent(event).catch((err) =>
+      growthLog.error({ event: "viral_event_trigger_failed", accountId: event.accountId, eventType: event.eventType, err: String(err) }, "Viral event trigger failed")
+    );
 
     return res.json({ status: "queued", eventType: event.eventType });
   });
@@ -149,8 +162,7 @@ export function registerGrowthRoutes(app: express.Application): void {
     if (!code) return res.status(400).json({ error: "code required" });
 
     const supabase = createServiceClient();
-    const { data: referral } = await supabase
-      .from("referral_codes")
+    const { data: referral } = await (supabase.from("referral_codes") as any)
       .select("code, business_name, owner_name, account_id")
       .eq("code", code.toUpperCase())
       .single();
@@ -165,7 +177,7 @@ export function registerGrowthRoutes(app: express.Application): void {
     });
   });
 
-  console.log("[GrowthOrchestrator] Routes registered");
+  growthLog.info({ event: "routes_registered" }, "Growth routes registered");
 }
 
 // ─── Cron Schedules ────────────────────────────────────────────
@@ -173,34 +185,39 @@ export function registerGrowthRoutes(app: express.Application): void {
 export function startGrowthCrons(): void {
   // ── Every 6 hours — social posting (round-robin accounts) ──
   cron.schedule("0 */6 * * *", async () => {
-    console.log("[GrowthCron] Starting social posting round...");
+    if (guardKillSwitch("KILL_GROWTH_AUTOMATIONS", { event: "social_posting_cron" })) return;
+    growthLog.info({ event: "cron_social_posting" }, "Starting social posting round...");
     await runSocialPostingRound();
   });
 
   // ── Daily 7:00 AM UTC — case study batch for yesterday's jobs ──
   cron.schedule("0 7 * * *", async () => {
-    console.log("[GrowthCron] Running daily case study batch...");
+    if (guardKillSwitch("KILL_GROWTH_AUTOMATIONS", { event: "case_study_cron" })) return;
+    growthLog.info({ event: "cron_case_study" }, "Running daily case study batch...");
     await runWeeklyCaseStudyBatch(); // handles filtering by date internally
   });
 
   // ── Daily 10:00 PM UTC — viral event scanner ──────────────
   cron.schedule("0 22 * * *", async () => {
-    console.log("[GrowthCron] Scanning for viral events...");
+    if (guardKillSwitch("KILL_GROWTH_AUTOMATIONS", { event: "viral_scan_cron" })) return;
+    growthLog.info({ event: "cron_viral_scan" }, "Scanning for viral events...");
     await scanForViralEvents();
   });
 
   // ── Weekly Monday 6:00 AM UTC — growth report to founder ──
   cron.schedule("0 6 * * 1", async () => {
-    console.log("[GrowthCron] Sending weekly growth report...");
+    if (guardKillSwitch("KILL_GROWTH_AUTOMATIONS", { event: "growth_report_cron" })) return;
+    growthLog.info({ event: "cron_growth_report" }, "Sending weekly growth report...");
     await sendWeeklyGrowthReport();
   });
 
   // ── Every hour — process growth_task_queue ─────────────────
   cron.schedule("0 * * * *", async () => {
+    if (guardKillSwitch("KILL_GROWTH_AUTOMATIONS", { event: "growth_queue_cron" })) return;
     await processGrowthTaskQueue();
   });
 
-  console.log("[GrowthOrchestrator] Crons scheduled");
+  growthLog.info({ event: "crons_scheduled" }, "Growth crons scheduled");
 }
 
 // ─── Cron Implementations ──────────────────────────────────────
@@ -209,11 +226,10 @@ async function runSocialPostingRound(): Promise<void> {
   const supabase = createServiceClient();
 
   // Get active accounts that haven't been posted for recently
-  const { data: accounts } = await supabase
-    .from("accounts")
+  const { data: accounts } = await (supabase.from("accounts") as any)
     .select("id, business_name, trade_type, city, state, owner_name")
-    .in("plan", ["basic", "pro"])
-    .eq("status", "active")
+    .in("plan", ["lite", "growth", "scale"])
+    .eq("subscription_status", "active")
     .limit(20); // Process 20 accounts per run
 
   if (!accounts || accounts.length === 0) return;
@@ -225,8 +241,7 @@ async function runSocialPostingRound(): Promise<void> {
     const account = accounts[i];
     try {
       // Get recent case studies for this account
-      const { data: recentCaseStudies } = await supabase
-        .from("case_studies")
+      const { data: recentCaseStudies } = await (supabase.from("case_studies") as any)
         .select("summary, job_type: title, title")
         .eq("account_id", account.id)
         .order("created_at", { ascending: false })
@@ -249,7 +264,7 @@ async function runSocialPostingRound(): Promise<void> {
         await delay(30000);
       }
     } catch (err) {
-      console.error(`[GrowthCron] Social posting failed for account ${account.id}:`, err);
+      growthLog.error({ event: "social_posting_round_failed", accountId: account.id, err: String(err) }, `Social posting failed for account ${account.id}`);
     }
   }
 }
@@ -257,8 +272,7 @@ async function runSocialPostingRound(): Promise<void> {
 async function processGrowthTaskQueue(): Promise<void> {
   const supabase = createServiceClient();
 
-  const { data: tasks } = await supabase
-    .from("growth_task_queue")
+  const { data: tasks } = await (supabase.from("growth_task_queue") as any)
     .select("*")
     .eq("status", "pending")
     .lte("scheduled_for", new Date().toISOString())
@@ -269,8 +283,7 @@ async function processGrowthTaskQueue(): Promise<void> {
 
   for (const task of tasks) {
     try {
-      await supabase
-        .from("growth_task_queue")
+      await (supabase.from("growth_task_queue") as any)
         .update({ status: "processing" })
         .eq("id", task.id);
 
@@ -293,14 +306,12 @@ async function processGrowthTaskQueue(): Promise<void> {
           break;
       }
 
-      await supabase
-        .from("growth_task_queue")
+      await (supabase.from("growth_task_queue") as any)
         .update({ status: "completed", completed_at: new Date().toISOString() })
         .eq("id", task.id);
     } catch (err) {
-      console.error(`[GrowthQueue] Task ${task.id} failed:`, err);
-      await supabase
-        .from("growth_task_queue")
+      growthLog.error({ event: "growth_task_failed", taskId: task.id, taskType: task.task_type, accountId: task.account_id, err: String(err) }, `Growth task ${task.id} failed`);
+      await (supabase.from("growth_task_queue") as any)
         .update({ status: "failed", error: String(err) })
         .eq("id", task.id);
     }
@@ -323,7 +334,7 @@ async function sendWeeklyGrowthReport(): Promise<void> {
     supabase.from("social_posts").select("id", { count: "exact", head: true }).gte("created_at", sevenDaysAgo),
     supabase.from("referral_codes").select("uses").gte("updated_at", sevenDaysAgo),
     supabase.from("viral_events_log").select("id", { count: "exact", head: true }).gte("created_at", sevenDaysAgo),
-    supabase.from("accounts").select("id", { count: "exact", head: true }).eq("status", "active"),
+    supabase.from("accounts").select("id", { count: "exact", head: true }).eq("subscription_status", "active"),
   ]);
 
   const caseStudyCount = (newCaseStudies as any).value?.count ?? 0;
@@ -345,18 +356,21 @@ Referral Code Uses: ${referralUses} this week
 
 Dashboard: https://app.titancrew.ai/meta-swarm`;
 
-  // Send to founder
-  const twilioClient = twilio(
-    process.env.TWILIO_ACCOUNT_SID,
-    process.env.TWILIO_AUTH_TOKEN
-  );
-
+  // Send to founder (guarded by SMS kill switch)
   if (process.env.FOUNDER_PHONE) {
-    await twilioClient.messages.create({
-      body: report,
-      from: process.env.TWILIO_PHONE_NUMBER!,
-      to: process.env.FOUNDER_PHONE,
-    });
+    if (guardKillSwitch("KILL_OUTBOUND_SMS", { event: "weekly_growth_report_sms", to: process.env.FOUNDER_PHONE })) {
+      growthLog.warn({ event: "growth_report_sms_blocked" }, "Weekly growth report SMS blocked by kill switch");
+    } else {
+      const twilioClient = twilio(
+        process.env.TWILIO_ACCOUNT_SID,
+        process.env.TWILIO_AUTH_TOKEN
+      );
+      await twilioClient.messages.create({
+        body: report,
+        from: process.env.TWILIO_PHONE_NUMBER!,
+        to: process.env.FOUNDER_PHONE,
+      });
+    }
   }
 
   await auditLog({
@@ -445,16 +459,14 @@ async function fetchGrowthStats(accountId: string): Promise<GrowthStats> {
 
 async function buildPostingContext(accountId: string) {
   const supabase = createServiceClient();
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await (supabase.from("accounts") as any)
     .select("id, business_name, trade_type, city, state, owner_name")
     .eq("id", accountId)
     .single();
 
   if (!account) return null;
 
-  const { data: recentCaseStudies } = await supabase
-    .from("case_studies")
+  const { data: recentCaseStudies } = await (supabase.from("case_studies") as any)
     .select("summary, title")
     .eq("account_id", accountId)
     .order("created_at", { ascending: false })
@@ -467,10 +479,10 @@ async function buildPostingContext(accountId: string) {
     city: account.city ?? "Houston",
     state: account.state ?? "TX",
     season: getCurrentSeason(),
-    recentCaseStudies: (recentCaseStudies ?? []).map((cs) => ({
-      summary: cs.summary,
+    recentCaseStudies: (recentCaseStudies ?? []).map((cs: any) => ({
+      summary: (cs as any).summary,
       jobType: "",
-      title: cs.title,
+      title: (cs as any).title,
     })),
   };
 }
@@ -480,8 +492,7 @@ async function handleShareReviewTask(
   payload: { reviewText: string; customerName: string; rating: number; businessName: string }
 ): Promise<void> {
   const supabase = createServiceClient();
-  const { data: account } = await supabase
-    .from("accounts")
+  const { data: account } = await (supabase.from("accounts") as any)
     .select("id, business_name, trade_type, city, state, owner_name")
     .eq("id", accountId)
     .single();
